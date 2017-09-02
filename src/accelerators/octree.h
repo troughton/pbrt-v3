@@ -64,11 +64,8 @@ namespace pbrt {
         
         size_t addPrimitives(const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount);
         Point3f computeCentroid(const OctreePrimitiveInfo* prims, const size_t primCount);
-        int childIndexBufferOffset(size_t base, size_t numChildren);
         size_t nextNodeIndex();
         size_t buildRecursive(const Bounds3f bounds, const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount, size_t depth);
-        
-        size_t childNodeAtIndex(size_t nodeIndex, const OctreeNode &node, uint8_t childIndex) const;
         
         struct TraversalContext;
         
@@ -81,7 +78,6 @@ namespace pbrt {
         // BVHAccel Private Data
         std::vector<std::shared_ptr<Primitive>> primitives;
         std::vector<OctreeNode> nodesBuffer;
-        std::vector<uint32_t> childrenIndexBuffer;
         
         Bounds3f worldBound;
         Point3f centre;
