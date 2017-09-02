@@ -33,11 +33,15 @@ namespace pbrt {
     };
     
     struct OctreeNode {
+        Bounds3f bounds;
+        union {
+            uint32_t primitiveOffset = 0;
+            uint32_t childOffset;
+        };
+        
         Point3f centroid;
+        uint16_t primitiveCount = 0;
         uint8_t presentChildren = 0;
-        uint8_t primitiveCount = 0;
-        int primitiveOffset = 0;
-        int childrenIndexBufferOffset = 0;
         
         inline bool isTerminal() const {
             return this->presentChildren == 0;
@@ -53,14 +57,13 @@ namespace pbrt {
             primitiveInfo[i] = OctreePrimitiveInfo(i, primitives[i]->WorldBound());
             this->worldBound = Union(this->worldBound, primitiveInfo[i].bounds);
         }
-        
-        this->primitives = primitives;
+    
+        this->primitives.reserve(primitives.size());
         
         this->nodesBuffer.reserve(2 * primitives.size());
         this->childrenIndexBuffer.reserve(2 * primitives.size());
         
-        size_t currentPrimitiveOffset = 0;
-        this->buildRecursive(primitiveInfo.data(), this->primitives.data(), primitives.size(), currentPrimitiveOffset, 0);
+        this->buildRecursive(this->worldBound, primitives, primitiveInfo.data(), primitiveInfo.size(), 0);
     }
     
     OctreeAccel::~OctreeAccel() { }
@@ -79,15 +82,6 @@ namespace pbrt {
         return centroid / primCount;
     }
     
-    bool OctreeAccel::isInChild(Point3f point, Point3f centroid, OctreeChild child) {
-        uint8_t mask = 0;
-        mask |= (point.x >= centroid.x ? 0b100 : 0);
-        mask |= (point.y >= centroid.y ? 0b010 : 0);
-        mask |= (point.z >= centroid.z ? 0b001 : 0);
-        
-        return (OctreeChild)mask == child;
-    }
-    
     int OctreeAccel::childIndexBufferOffset(size_t base, size_t numChildren) {
         size_t nextIndex = this->childrenIndexBuffer.size();
         
@@ -102,89 +96,76 @@ namespace pbrt {
         return static_cast<int>(nextIndex - base);
     }
     
+    size_t OctreeAccel::addPrimitives(const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount) {
+        size_t baseIndex = this->primitives.size();
+        
+        for (size_t i = 0; i < primCount; i += 1) {
+            size_t primitiveIndex = primInfos[i].primitiveNumber;
+            this->primitives.push_back(prims[primitiveIndex]);
+        }
+            
+        return baseIndex;
+    }
+    
     size_t OctreeAccel::nextNodeIndex() {
         size_t index = this->nodesBuffer.size();
         this->nodesBuffer.push_back(OctreeNode());
         return index;
     }
     
-    size_t OctreeAccel::buildRecursive(OctreePrimitiveInfo* primInfos, std::shared_ptr<Primitive>* prims, const size_t primCount, size_t& currentPrimitiveOffset, size_t depth) {
+    size_t OctreeAccel::buildRecursive(const Bounds3f bounds, const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount, size_t depth) {
         const size_t nodeIndex = this->nextNodeIndex();
+        OctreeNode *node = &this->nodesBuffer[nodeIndex];
         
-        Point3f centroid = this->computeCentroid(primInfos, primCount);
+        node->bounds = bounds;
+        const Point3f centroid = (bounds.pMin + bounds.pMax) * 0.5; // this->computeCentroid(primInfos, primCount);
+        node->centroid = centroid;
         
-        size_t categorisedPrimitivesDivider = 0;
-        size_t rangeStartIndices[9];
+        // If we're at the stopping criteria (e.g. primCount <= maxPrimsPerLeaf), stop and fill in the leaf node.
+        // Otherwise, split this node into its children.
+        // For each child, reorder the primInfos such that the start of the buffer contains only those elements that need to be considered for the current child.
+        
+        if (depth == depthLimit || primCount <= maxPrimsPerNode || bounds.Volume() < minChildVolume) {
+            // Make this a leaf node.
+            
+            node->primitiveCount = primCount;
+            node->primitiveOffset = this->addPrimitives(prims, primInfos, primCount);
+            
+            return nodeIndex;
+        }
+        
+        uint32_t childNodeIndices[8];
         size_t childCount = 0;
         
-        rangeStartIndices[8] = primCount;
-        
-        size_t childIndexBufferIndex = 0;
-        {
-            OctreeNode *node = &this->nodesBuffer[nodeIndex];
-            node->centroid = centroid;
+        for (size_t child = 0; child < 8; child += 1) {
+            bool posX = (child & OctreeChildMask::PosX) != 0;
+            bool posY = (child & OctreeChildMask::PosY) != 0;
+            bool posZ = (child & OctreeChildMask::PosZ) != 0;
+            const Point3f minPoint = Point3f(posX ? centroid.x : node->bounds.pMin.x, posY ? centroid.y : node->bounds.pMin.y, posZ ? centroid.z : node->bounds.pMin.z);
+            const Point3f maxPoint = Point3f(posX ? node->bounds.pMax.x : centroid.x, posY ? node->bounds.pMax.y : centroid.y, posZ ? node->bounds.pMax.z : centroid.z);
+            
+            const Bounds3f childBounds = Bounds3f(minPoint, maxPoint);
+            
+            size_t rangeEndIndex = 0;
             
             for (size_t i = 0; i < primCount; i += 1) {
-                if (Inside(centroid, primInfos[i].bounds)) {
-                    std::swap(prims[i], prims[categorisedPrimitivesDivider]); // Everything before the divider has already been categorised.
-                    std::swap(primInfos[i], primInfos[categorisedPrimitivesDivider]);
-                    categorisedPrimitivesDivider += 1;
+                if (Overlaps(primInfos[i].bounds, childBounds)) {
+                    std::swap(primInfos[i], primInfos[rangeEndIndex]);
+                    rangeEndIndex += 1;
                 }
             }
             
-            node->primitiveCount = categorisedPrimitivesDivider;
-            
-            // Everything in the range 0..<categorisedPrimitivesDivider belongs to node.
-            node->primitiveOffset = currentPrimitiveOffset;
-            currentPrimitiveOffset += categorisedPrimitivesDivider;
-            
-            
-            problem here is that a primitive may belong to multiple children.
-            
-            // Now, assign each remaining primitive to one of the children.
-            for (size_t childIndex = 0; childIndex < 8; childIndex += 1) {
-                OctreeChild child = (OctreeChild)childIndex;
-                size_t rangeStart = categorisedPrimitivesDivider;
-                rangeStartIndices[childIndex] = rangeStart;
-                for (size_t i = rangeStart; i < primCount; i += 1) {
-                    if (this->isInChild(primInfos[i].centroid, centroid, child)) {
-                        std::swap(prims[i], prims[categorisedPrimitivesDivider]); // Everything before the divider has already been categorised.
-                        std::swap(primInfos[i], primInfos[categorisedPrimitivesDivider]);
-                        categorisedPrimitivesDivider += 1;
-                    }
-                }
-                
-                // Everything in the range rangeStart..<categorisedPrimitivesDivider belongs to child.
-                
-                if (rangeStart != categorisedPrimitivesDivider) {
-                    node->presentChildren |= 1 << childIndex;
-                    childCount += 1;
-                }
+            if (rangeEndIndex > 0) {
+                node->presentChildren |= 1 << child;
+                childNodeIndices[childCount] = this->buildRecursive(childBounds, prims, primInfos, rangeEndIndex, depth + 1);
+                childCount += 1;
             }
-            
-            node->childrenIndexBufferOffset = this->childIndexBufferOffset(nodeIndex, childCount);
-            childIndexBufferIndex = nodeIndex + node->childrenIndexBufferOffset;
         }
         
-        // Now actually create the children and add them to the children index buffer.
-        // After this point, the node pointer may be invalidated, so don't access it.
-        
-        size_t childNumber = 0;
-        
-        for (size_t childIndex = 0; childIndex < 8; childIndex += 1) {
-            size_t rangeStart = rangeStartIndices[childIndex]; // inclusive
-            size_t rangeUpperBound = rangeStartIndices[childIndex + 1]; // exclusive
-            size_t rangeSize = rangeUpperBound - rangeStart;
-            
-            if (rangeSize == 0) { continue; };
-            
-            size_t childNodeIndex = this->buildRecursive(&primInfos[rangeStart], &prims[rangeStart], rangeSize, currentPrimitiveOffset, depth + 1);
-            this->childrenIndexBuffer[childIndexBufferIndex + childNumber] = childNodeIndex;
-            
-            childNumber += 1;
+        if (childCount > 0) {
+            size_t childIndexBufferOffset = this->childIndexBufferOffset(nodeIndex, childCount);
+            memcpy(&this->childrenIndexBuffer[nodeIndex + childIndexBufferOffset], childNodeIndices, childCount * sizeof(uint32_t));
         }
-        
-        this->maxDepth = std::max(depth, maxDepth);
         
         return nodeIndex;
     }
@@ -203,7 +184,7 @@ namespace pbrt {
         
         // Now, we need to know how many bits are set in maskedValue.
         uint8_t priorChildren = HammingWeightTable[maskedValue];
-        size_t childIndexInBuffer = nodeIndex + node.childrenIndexBufferOffset + priorChildren;
+        size_t childIndexInBuffer = nodeIndex + node.childOffset + priorChildren;
         
         size_t childNodeIndexInBuffer = this->childrenIndexBuffer[childIndexInBuffer];
         DCHECK(childNodeIndexInBuffer > nodeIndex);
@@ -228,20 +209,20 @@ namespace pbrt {
         // select the entry plane and set bits
         if (t0.x > t0.y) {
             if (t0.x > t0.z) { // PLANE YZ
-                if (tm.y < t0.x) { answer |= 2; }    // set bit at position 1
-                if (tm.z < t0.x) { answer |= 1; }    // set bit at position 0
+                if (tm.y < t0.x) { answer |= OctreeChildMask::PosY; }    // set bit at position 1
+                if (tm.z < t0.x) { answer |= OctreeChildMask::PosZ; }    // set bit at position 0
                 return static_cast<size_t>(answer);
             }
         } else {
             if (t0.y > t0.z){ // PLANE XZ
-                if (tm.x < t0.y) { answer |= 4; }    // set bit at position 2
-                if (tm.z < t0.y) { answer |= 1; }    // set bit at position 0
+                if (tm.x < t0.y) { answer |= OctreeChildMask::PosX; }    // set bit at position 2
+                if (tm.z < t0.y) { answer |= OctreeChildMask::PosZ; }    // set bit at position 0
                 return static_cast<size_t>(answer);
             }
         }
         // PLANE XY
-        if (tm.x < t0.z) { answer |= 4; }    // set bit at position 2
-        if (tm.y < t0.z) { answer |= 2; }    // set bit at position 1
+        if (tm.x < t0.z) { answer |= OctreeChildMask::PosX; }    // set bit at position 2
+        if (tm.y < t0.z) { answer |= OctreeChildMask::PosY; }    // set bit at position 1
         return static_cast<size_t>(answer);
     }
     
@@ -261,28 +242,31 @@ namespace pbrt {
         
         const OctreeNode *node = this->nodeAt(nodeIndex);
         
-        Vector3f offset(node->centroid - traversalContext.rayOrigin);
-        Vector3f tm(traversalContext.rayInvDir.x * offset.x, traversalContext.rayInvDir.y * offset.y, traversalContext.rayInvDir.z * offset.z);
+//        Vector3f offset(node->centroid - traversalContext.rayOrigin);
+//        Vector3f tm(traversalContext.rayInvDir.x * offset.x, traversalContext.rayInvDir.y * offset.y, traversalContext.rayInvDir.z * offset.z);
+        Vector3f tm = (t0 + t1) * 0.5;
         
         const uint8_t negationMask = traversalContext.childMask;
         
         bool hit = false;
         
+        if (node->isTerminal()) {
         // Process any primitives within this node.
         
-        for (size_t i = 0; i < node->primitiveCount; i += 1) {
-            size_t primitiveIndex = node->primitiveOffset + i;
-            const std::shared_ptr<Primitive>& primitive = this->primitives[primitiveIndex];
-            if (traversalContext.isect == nullptr) {
-                hit |= primitive->IntersectP(traversalContext.originalRay);
-            } else {
-                hit |= primitive->Intersect(traversalContext.originalRay, traversalContext.isect);
+            for (size_t i = 0; i < node->primitiveCount; i += 1) {
+                size_t primitiveIndex = node->primitiveOffset + i;
+                const std::shared_ptr<Primitive>& primitive = this->primitives[primitiveIndex];
+                if (traversalContext.isect == nullptr) {
+                    hit |= primitive->IntersectP(traversalContext.originalRay);
+                } else {
+                    hit |= primitive->Intersect(traversalContext.originalRay, traversalContext.isect);
+                }
             }
-        }
-        
-        if (node->presentChildren == 0) {
+            
             return hit;
         }
+        
+        // Otherwise, traverse its children.
         
         size_t currentNode = this->firstIntersectedNode(t0, tm);
         

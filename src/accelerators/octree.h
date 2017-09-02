@@ -43,6 +43,15 @@ namespace pbrt {
             PosXPosYPosZ = 7
         };
         
+        enum OctreeChildMask : uint8_t {
+            // PosX means bit 2 is set
+            // PosY means bit 1 is set
+            // PosZ means bit 0 is set
+            PosX = 0b100,
+            PosY = 0b010,
+            PosZ = 0b001
+        };
+        
         // OctreeAccel Public Methods
         OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &p);
         Bounds3f WorldBound() const;
@@ -53,12 +62,11 @@ namespace pbrt {
     private:
         // BVHAccel Private Methods
         
-        int addNodePrimitives(std::shared_ptr<Primitive>* prims, const size_t primCount);
+        size_t addPrimitives(const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount);
         Point3f computeCentroid(const OctreePrimitiveInfo* prims, const size_t primCount);
-        bool isInChild(Point3f point, Point3f centroid, OctreeChild child);
         int childIndexBufferOffset(size_t base, size_t numChildren);
         size_t nextNodeIndex();
-        size_t buildRecursive(OctreePrimitiveInfo* primInfos, std::shared_ptr<Primitive>* prims, const size_t primCount, size_t& currentPrimitiveOffset, size_t depth);
+        size_t buildRecursive(const Bounds3f bounds, const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount, size_t depth);
         
         size_t childNodeAtIndex(size_t nodeIndex, const OctreeNode &node, uint8_t childIndex) const;
         
@@ -73,11 +81,13 @@ namespace pbrt {
         // BVHAccel Private Data
         std::vector<std::shared_ptr<Primitive>> primitives;
         std::vector<OctreeNode> nodesBuffer;
-        std::vector<int> childrenIndexBuffer;
+        std::vector<uint32_t> childrenIndexBuffer;
         
         Bounds3f worldBound;
         Point3f centre;
-        size_t maxDepth = 0;
+        size_t depthLimit = INTPTR_MAX;
+        size_t maxPrimsPerNode = 4;
+        Float minChildVolume = 0.001;
     };
     
     std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(
