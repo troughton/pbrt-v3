@@ -58,7 +58,7 @@ namespace pbrt {
         bool isInChild(Point3f point, Point3f centroid, OctreeChild child);
         int childIndexBufferOffset(size_t base, size_t numChildren);
         size_t nextNodeIndex();
-        size_t buildRecursive(OctreePrimitiveInfo* primInfos, std::shared_ptr<Primitive>* prims, const size_t primCount);
+        size_t buildRecursive(OctreePrimitiveInfo* primInfos, std::shared_ptr<Primitive>* prims, const size_t primCount, size_t& currentPrimitiveOffset, size_t depth);
         
         size_t childNodeAtIndex(size_t nodeIndex, const OctreeNode &node, uint8_t childIndex) const;
         
@@ -68,17 +68,16 @@ namespace pbrt {
         size_t newNode(Vector3f tm, size_t x, size_t y, size_t z) const;
         bool processSubtree(Vector3f t0, Vector3f t1, size_t nodeIndex, const TraversalContext& traversalContext) const;
         bool traverseOctree(const Ray& ray, SurfaceInteraction *isect) const;
+        inline const OctreeNode* nodeAt(size_t index) const;
         
         // BVHAccel Private Data
         std::vector<std::shared_ptr<Primitive>> primitives;
         std::vector<OctreeNode> nodesBuffer;
         std::vector<int> childrenIndexBuffer;
+        
         Bounds3f worldBound;
         Point3f centre;
-        
-        inline const OctreeNode* nodeAt(size_t index) const {
-            return &this->nodesBuffer[index];
-        }
+        size_t maxDepth = 0;
     };
     
     std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(

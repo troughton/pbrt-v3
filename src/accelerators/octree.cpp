@@ -17,7 +17,7 @@ namespace pbrt {
     
     //    STAT_MEMORY_COUNTER("Memory/BVH tree", treeBytes);
     //    STAT_RATIO("BVH/Primitives per leaf node", totalPrimitives, totalLeafNodes);
-    //    STAT_COUNTER("BVH/Interior nodes", interiorNodes);
+//        STAT_COUNTER("Octree/Depth", maxDepth);
     //    STAT_COUNTER("BVH/Leaf nodes", leafNodes);
     
     // OctreeAccel Local Declarations
@@ -45,29 +45,28 @@ namespace pbrt {
     };
     
     OctreeAccel::OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &primitives) {
-        // Initialize _primitiveInfo_ array for primitives
+        ProfilePhase _(Prof::AccelConstruction);
         
+        // Initialize _primitiveInfo_ array for primitives
         std::vector<OctreePrimitiveInfo> primitiveInfo(primitives.size());
         for (size_t i = 0; i < primitives.size(); ++i) {
             primitiveInfo[i] = OctreePrimitiveInfo(i, primitives[i]->WorldBound());
             this->worldBound = Union(this->worldBound, primitiveInfo[i].bounds);
         }
         
-        std::vector<std::shared_ptr<Primitive>> primitivesCopy = primitives;
+        this->primitives = primitives;
         
-        this->buildRecursive(primitiveInfo.data(), primitivesCopy.data(), primitives.size());
+        this->nodesBuffer.reserve(2 * primitives.size());
+        this->childrenIndexBuffer.reserve(2 * primitives.size());
+        
+        size_t currentPrimitiveOffset = 0;
+        this->buildRecursive(primitiveInfo.data(), this->primitives.data(), primitives.size(), currentPrimitiveOffset, 0);
     }
     
     OctreeAccel::~OctreeAccel() { }
     
-    int OctreeAccel::addNodePrimitives(std::shared_ptr<Primitive>* prims, const size_t primCount) {
-        if (primCount == 0) { return 0; }
-        
-        size_t index = this->primitives.size();
-        this->primitives.resize(index + primCount);
-        
-        memcpy(&this->primitives[index], prims, primCount * sizeof(prims[0]));
-        return static_cast<int>(index);
+    Bounds3f OctreeAccel::WorldBound() const {
+        return this->worldBound;
     }
     
     Point3f OctreeAccel::computeCentroid(const OctreePrimitiveInfo* prims, const size_t primCount) {
@@ -90,14 +89,17 @@ namespace pbrt {
     }
     
     int OctreeAccel::childIndexBufferOffset(size_t base, size_t numChildren) {
-        size_t returnValue = this->childrenIndexBuffer.size() - base;
-        size_t requiredSize = this->childrenIndexBuffer.size() + numChildren;
+        size_t nextIndex = this->childrenIndexBuffer.size();
+        
+        size_t requiredSize = nextIndex + numChildren;
+        
         if (requiredSize > this->childrenIndexBuffer.capacity()) {
-            this->childrenIndexBuffer.reserve(requiredSize);
+            this->childrenIndexBuffer.reserve(requiredSize * 2);
         }
+        
         this->childrenIndexBuffer.resize(requiredSize);
         
-        return static_cast<int>(returnValue);
+        return static_cast<int>(nextIndex - base);
     }
     
     size_t OctreeAccel::nextNodeIndex() {
@@ -106,7 +108,7 @@ namespace pbrt {
         return index;
     }
     
-    size_t OctreeAccel::buildRecursive(OctreePrimitiveInfo* primInfos, std::shared_ptr<Primitive>* prims, const size_t primCount) {
+    size_t OctreeAccel::buildRecursive(OctreePrimitiveInfo* primInfos, std::shared_ptr<Primitive>* prims, const size_t primCount, size_t& currentPrimitiveOffset, size_t depth) {
         const size_t nodeIndex = this->nextNodeIndex();
         
         Point3f centroid = this->computeCentroid(primInfos, primCount);
@@ -117,7 +119,7 @@ namespace pbrt {
         
         rangeStartIndices[8] = primCount;
         
-        int *childIndexBuffer = nullptr;
+        size_t childIndexBufferIndex = 0;
         {
             OctreeNode *node = &this->nodesBuffer[nodeIndex];
             node->centroid = centroid;
@@ -133,7 +135,11 @@ namespace pbrt {
             node->primitiveCount = categorisedPrimitivesDivider;
             
             // Everything in the range 0..<categorisedPrimitivesDivider belongs to node.
-            node->primitiveOffset = this->addNodePrimitives(prims, categorisedPrimitivesDivider);
+            node->primitiveOffset = currentPrimitiveOffset;
+            currentPrimitiveOffset += categorisedPrimitivesDivider;
+            
+            
+            problem here is that a primitive may belong to multiple children.
             
             // Now, assign each remaining primitive to one of the children.
             for (size_t childIndex = 0; childIndex < 8; childIndex += 1) {
@@ -157,7 +163,7 @@ namespace pbrt {
             }
             
             node->childrenIndexBufferOffset = this->childIndexBufferOffset(nodeIndex, childCount);
-            childIndexBuffer = &this->childrenIndexBuffer[nodeIndex + node->childrenIndexBufferOffset];
+            childIndexBufferIndex = nodeIndex + node->childrenIndexBufferOffset;
         }
         
         // Now actually create the children and add them to the children index buffer.
@@ -172,12 +178,19 @@ namespace pbrt {
             
             if (rangeSize == 0) { continue; };
             
-            childIndexBuffer[childNumber] = this->buildRecursive(&primInfos[rangeStart], &prims[rangeStart], rangeSize);
+            size_t childNodeIndex = this->buildRecursive(&primInfos[rangeStart], &prims[rangeStart], rangeSize, currentPrimitiveOffset, depth + 1);
+            this->childrenIndexBuffer[childIndexBufferIndex + childNumber] = childNodeIndex;
             
             childNumber += 1;
         }
         
+        this->maxDepth = std::max(depth, maxDepth);
+        
         return nodeIndex;
+    }
+    
+    const OctreeNode* OctreeAccel::nodeAt(size_t index) const {
+        return &this->nodesBuffer[index];
     }
     
     // Used to lookup the number of other child nodes before the current child node. More directly, hammingWeightTable[i] is the number of set bits in i given i < 128.
@@ -185,13 +198,17 @@ namespace pbrt {
     
     size_t OctreeAccel::childNodeAtIndex(size_t nodeIndex, const OctreeNode &node, uint8_t childIndex) const {
         // The offset in the child indices buffer is the number of children present before childIndex.
-        uint8_t mask = ~(~((uint8_t)0) << childIndex); // such that bits 0..<childIndex are 1 and all other bits are 0.
+        uint8_t mask = ~(255 << childIndex); // such that bits 0..<childIndex are 1 and all other bits are 0.
         uint8_t maskedValue = node.presentChildren & mask;
         
         // Now, we need to know how many bits are set in maskedValue.
         uint8_t priorChildren = HammingWeightTable[maskedValue];
         size_t childIndexInBuffer = nodeIndex + node.childrenIndexBufferOffset + priorChildren;
-        return this->childrenIndexBuffer[childIndexInBuffer];
+        
+        size_t childNodeIndexInBuffer = this->childrenIndexBuffer[childIndexInBuffer];
+        DCHECK(childNodeIndexInBuffer > nodeIndex);
+        
+        return childNodeIndexInBuffer;
     }
     
     // Octree traversal adapted from https://stackoverflow.com/questions/10228690/ray-octree-intersection-algorithms
@@ -240,12 +257,14 @@ namespace pbrt {
     bool OctreeAccel::processSubtree(Vector3f t0, Vector3f t1, size_t nodeIndex, const TraversalContext& traversalContext) const {
         if (t1.x < 0 || t1.y < 0 || t1.z < 0) { return false; }
         
+        DCHECK(nodeIndex < this->nodesBuffer.size());
+        
         const OctreeNode *node = this->nodeAt(nodeIndex);
         
         Vector3f offset(node->centroid - traversalContext.rayOrigin);
         Vector3f tm(traversalContext.rayInvDir.x * offset.x, traversalContext.rayInvDir.y * offset.y, traversalContext.rayInvDir.z * offset.z);
         
-        const uint8_t a = traversalContext.childMask;
+        const uint8_t negationMask = traversalContext.childMask;
         
         bool hit = false;
         
@@ -268,58 +287,54 @@ namespace pbrt {
         size_t currentNode = this->firstIntersectedNode(t0, tm);
         
         do {
+            uint8_t childIndex = currentNode ^ negationMask;
+            bool childIsPresent = (node->presentChildren & (1 << childIndex)) != 0; // The octree is sparse, so we don't always have every child.
+            size_t childNode = childIsPresent ? this->childNodeAtIndex(nodeIndex, *node, childIndex) : -1;
+            
             switch (currentNode) {
                 case 0: {
-                    size_t childNode = this->childNodeAtIndex(nodeIndex, *node, a);
-                    hit |= this->processSubtree(t0, tm, childNode, traversalContext);
+                    if (childIsPresent) { hit |= this->processSubtree(t0, tm, childNode, traversalContext); }
                     currentNode = this->newNode(tm, 4, 2, 1);
                     break;
                 }
                 case 1: {
-                    size_t childNode = this->childNodeAtIndex(nodeIndex, *node, 1 ^ a);
                     Vector3f newT1(tm.x, tm.y, t1.z);
-                    hit |= this->processSubtree(Vector3f(t0.x, t0.y, tm.z), newT1, childNode, traversalContext);
+                    if (childIsPresent) { hit |= this->processSubtree(Vector3f(t0.x, t0.y, tm.z), newT1, childNode, traversalContext); }
                     currentNode = this->newNode(newT1, 5, 3, 8);
                     break;
                 }
                 case 2: {
-                    size_t childNode = this->childNodeAtIndex(nodeIndex, *node, 2 ^ a);
                     Vector3f newT1(tm.x, t1.y, tm.z);
-                    hit |= this->processSubtree(Vector3f(t0.x, tm.y, t0.z), newT1, childNode, traversalContext);
+                    if (childIsPresent) { hit |= this->processSubtree(Vector3f(t0.x, tm.y, t0.z), newT1, childNode, traversalContext); }
                     currentNode = this->newNode(newT1, 6, 8, 3);
                     break;
                 }
                 case 3: {
-                    size_t childNode = this->childNodeAtIndex(nodeIndex, *node, 3 ^ a);
                     Vector3f newT1(tm.x, t1.y, t1.z);
-                    hit |= this->processSubtree(Vector3f(t0.x, tm.y, tm.z), newT1, childNode, traversalContext);
+                    if (childIsPresent) { hit |= this->processSubtree(Vector3f(t0.x, tm.y, tm.z), newT1, childNode, traversalContext); }
                     currentNode = this->newNode(newT1, 7, 8, 8);
                     break;
                 }
                 case 4: {
-                    size_t childNode = this->childNodeAtIndex(nodeIndex, *node, 4 ^ a);
                     Vector3f newT1(t1.x, tm.y, tm.z);
-                    hit |= this->processSubtree(Vector3f(tm.x, t0.y, t0.z), newT1, childNode, traversalContext);
+                    if (childIsPresent) { hit |= this->processSubtree(Vector3f(tm.x, t0.y, t0.z), newT1, childNode, traversalContext); }
                     currentNode = this->newNode(newT1, 8, 6, 5);
                     break;
                 }
                 case 5: {
-                    size_t childNode = this->childNodeAtIndex(nodeIndex, *node, 5 ^ a);
                     Vector3f newT1(t1.x, tm.y, t1.z);
-                    hit |= this->processSubtree(Vector3f(tm.x, t0.y, tm.z), newT1, childNode, traversalContext);
+                    if (childIsPresent) { hit |= this->processSubtree(Vector3f(tm.x, t0.y, tm.z), newT1, childNode, traversalContext); }
                     currentNode = this->newNode(newT1, 8, 7, 8);
                     break;
                 }
                 case 6: {
-                    size_t childNode = this->childNodeAtIndex(nodeIndex, *node, 6 ^ a);
                     Vector3f newT1(t1.x, t1.y, tm.z);
-                    hit |= this->processSubtree(Vector3f(tm.x, tm.y, t0.z), newT1, childNode, traversalContext);
+                    if (childIsPresent) { hit |= this->processSubtree(Vector3f(tm.x, tm.y, t0.z), newT1, childNode, traversalContext); }
                     currentNode = this->newNode(newT1, 8, 8, 7);
                     break;
                 }
                 case 7: {
-                    size_t childNode = this->childNodeAtIndex(nodeIndex, *node, 7 ^ a);
-                    hit |= this->processSubtree(tm, t1, childNode, traversalContext);
+                    if (childIsPresent) { hit |= this->processSubtree(tm, t1, childNode, traversalContext); }
                     currentNode = 8;
                     break;
                 }
@@ -354,16 +369,16 @@ namespace pbrt {
             childMask |= 1; // set bit z
         }
         
-        Vector3f invD = Vector3f(1.0 / tmpRay.d.x, 1.0 / tmpRay.d.y, 1.0 / tmpRay.d.z);
+        Vector3f invD = Vector3f(1.0 / std::max(tmpRay.d.x, MachineEpsilon), 1.0 / std::max(tmpRay.d.y, MachineEpsilon), 1.0 / std::max(tmpRay.d.z, MachineEpsilon)); // Add a small epsilon to prevent infinite (and later NaN) values.
         
         Vector3f t0 = (this->worldBound.pMin - tmpRay.o);
         Vector3f t1 = (this->worldBound.pMax - tmpRay.o);
-        t0.x /= invD.x;
-        t1.x /= invD.x;
-        t0.y /= invD.y;
-        t1.y /= invD.y;
-        t0.z /= invD.z;
-        t1.z /= invD.z;
+        t0.x *= invD.x;
+        t1.x *= invD.x;
+        t0.y *= invD.y;
+        t1.y *= invD.y;
+        t0.z *= invD.z;
+        t1.z *= invD.z;
         
         if (std::max(std::max(t0.x, t0.y), t0.z) < std::min(std::min(t1.x, t1.y), t1.z)) {
             TraversalContext context(ray);
