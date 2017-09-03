@@ -63,15 +63,12 @@ namespace pbrt {
         // BVHAccel Private Methods
         
         size_t addPrimitives(const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount);
-        Point3f computeCentroid(const OctreePrimitiveInfo* prims, const size_t primCount);
         size_t nextNodeIndex();
         size_t buildRecursive(const Bounds3f bounds, const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount, size_t depth);
         
         struct TraversalContext;
         
-        size_t firstIntersectedNode(Vector3f t0, Vector3f tm) const;
-        size_t newNode(Vector3f tm, size_t x, size_t y, size_t z) const;
-        bool processSubtree(Vector3f t0, Vector3f t1, size_t nodeIndex, const TraversalContext& traversalContext) const;
+        bool processSubtree(size_t nodeIndex, const Ray& ray, const Vector3f &invDir, const int dirIsNeg[3], SurfaceInteraction *isect = nullptr) const;
         bool traverseOctree(const Ray& ray, SurfaceInteraction *isect) const;
         inline const OctreeNode* nodeAt(size_t index) const;
         
