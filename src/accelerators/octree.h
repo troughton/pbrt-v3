@@ -64,6 +64,7 @@ namespace pbrt {
         
         size_t addPrimitives(const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount);
         size_t nextNodeIndex();
+        void makeLeaf(OctreeNode* node, const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount);
         size_t buildRecursive(const Bounds3f bounds, const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount, size_t depth);
         
         struct TraversalContext;
@@ -83,7 +84,7 @@ namespace pbrt {
         Bounds3f worldBound;
         Point3f centre;
         size_t depthLimit = INTPTR_MAX;
-        size_t maxPrimsPerNode = 4;
+        size_t maxPrimsPerNode = 8;
     };
     
     std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(
