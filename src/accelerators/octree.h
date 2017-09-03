@@ -81,7 +81,7 @@ namespace pbrt {
         
         Bounds3f worldBound;
         Point3f centre;
-        size_t depthLimit = 20;
+        size_t depthLimit = INTPTR_MAX;
         size_t maxPrimsPerNode = 4;
     };
     

@@ -110,7 +110,7 @@ namespace pbrt {
         // Otherwise, split this node into its children.
         // For each child, reorder the primInfos such that the start of the buffer contains only those elements that need to be considered for the current child.
         
-        if (constrainedBounds.Volume() < 1e-3 || depth == depthLimit || primCount <= maxPrimsPerNode) {
+        if (constrainedBounds.Volume() < 1e-2 || depth == depthLimit || primCount <= maxPrimsPerNode) {
             // Make this a leaf node.
             node->primitiveCount = primCount;
             node->primitiveOffset = this->addPrimitives(prims, primInfos, primCount);
