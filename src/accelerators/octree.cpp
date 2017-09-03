@@ -175,21 +175,8 @@ namespace pbrt {
         return &this->nodesBuffer[index];
     }
     
-    // Octree traversal adapted from https://stackoverflow.com/questions/10228690/ray-octree-intersection-algorithms
     
-    struct OctreeAccel::TraversalContext {
-        const Ray& originalRay;
-        Vector3f origInvDir;
-        int origDirIsNeg[3];
-        uint8_t childMask;
-        Point3f rayOrigin;
-        Vector3f rayInvDir;
-        SurfaceInteraction *isect = nullptr;
-        
-        TraversalContext(const Ray& originalRay) : originalRay(originalRay) { }
-    };
-    
-    bool OctreeAccel::processSubtree(Vector3f t0, Vector3f t1, size_t nodeIndex, TraversalContext& traversalContext) const {
+    bool OctreeAccel::processSubtree(size_t nodeIndex, const Ray& ray, SurfaceInteraction *isect) const {
         const OctreeNode *node = this->nodeAt(nodeIndex);
         
         bool innerHit = false;
@@ -200,10 +187,10 @@ namespace pbrt {
             size_t primitiveIndex = node->primitiveOffset + i;
             
             const std::shared_ptr<Primitive>& primitive = this->primitives[primitiveIndex];
-            if (traversalContext.isect == nullptr) {
-                innerHit |= primitive->IntersectP(traversalContext.originalRay);
+            if (isect == nullptr) {
+                innerHit |= primitive->IntersectP(ray);
             } else {
-                innerHit |= primitive->Intersect(traversalContext.originalRay, traversalContext.isect);
+                innerHit |= primitive->Intersect(ray, isect);
             }
         }
         
@@ -219,12 +206,12 @@ namespace pbrt {
                 size_t childNode = node->childIndices[childIndex] + nodeIndex;
                 bool childIsPresent = childNode != nodeIndex;
                 if (childIsPresent) {
-                    bool intersects = this->nodeAt(childNode)->bounds.IntersectP(traversalContext.originalRay, &childTMins[childIndex], &childTMaxs[childIndex]);
+                    bool intersects = this->nodeAt(childNode)->bounds.IntersectP(ray, &childTMins[childIndex], &childTMaxs[childIndex]);
                     remainingChildren = (remainingChildren & ~(1 << childIndex)) | ((intersects ? 1 : 0) << childIndex); // zero out any children that don't intersect.
                 }
             }
             
-            float bestTMax = traversalContext.originalRay.tMax;
+            float bestTMax = ray.tMax;
             while (remainingChildren != 0) {
                 
                 float bestTMin = std::numeric_limits<float>::infinity();
@@ -242,9 +229,9 @@ namespace pbrt {
                 remainingChildren &= ~(1 << bestChildIndex);
                 if (childTMins[bestChildIndex] < bestTMax) {
                     size_t childNode = node->childIndices[bestChildIndex] + nodeIndex;
-                    if (this->processSubtree(t0, t1, childNode, traversalContext)) {
+                    if (this->processSubtree(childNode, ray, isect)) {
                         childHit = true;
-                        bestTMax = std::min(bestTMax, traversalContext.originalRay.tMax);
+                        bestTMax = std::min(bestTMax, ray.tMax);
                     }
                 }
             }
@@ -261,55 +248,7 @@ namespace pbrt {
             return false;
         }
         
-        uint8_t childMask = 0;
-        
-        Ray tmpRay = ray;
-        // fixes for rays with negative direction
-        if (tmpRay.d.x < 0){
-            tmpRay.o.x = this->centre.x * 2 - ray.o.x;
-            tmpRay.d.x = -ray.d.x;
-            childMask |= OctreeChildMask::PosX;
-        }
-        
-        if (tmpRay.d.y < 0) {
-            tmpRay.o.y = this->centre.y * 2 - ray.o.y;
-            tmpRay.d.y = -ray.d.y;
-            childMask |= OctreeChildMask::PosY;
-        }
-        
-        if (tmpRay.d.z < 0) {
-            tmpRay.o.z = this->centre.z * 2 - ray.o.z;
-            tmpRay.d.z = -ray.d.z;
-            childMask |= OctreeChildMask::PosZ;
-        }
-        
-        Vector3f invD = Vector3f(1.0 / std::max(tmpRay.d.x, MachineEpsilon), 1.0 / std::max(tmpRay.d.y, MachineEpsilon), 1.0 / std::max(tmpRay.d.z, MachineEpsilon)); // Add a small epsilon to prevent infinite (and later NaN) values.
-        
-        Vector3f t0 = (this->worldBound.pMin - tmpRay.o);
-        Vector3f t1 = (this->worldBound.pMax - tmpRay.o);
-        t0.x *= invD.x;
-        t1.x *= invD.x;
-        t0.y *= invD.y;
-        t1.y *= invD.y;
-        t0.z *= invD.z;
-        t1.z *= invD.z;
-        
-        if (std::max(std::max(t0.x, t0.y), t0.z) < std::min(std::min(t1.x, t1.y), t1.z)) {
-            TraversalContext context(ray);
-            context.childMask = childMask;
-            context.rayOrigin = tmpRay.o;
-            context.rayInvDir = invD;
-            context.isect = isect;
-            
-            context.origInvDir = Vector3f(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
-            context.origDirIsNeg[0] = context.origInvDir.x < 0;
-            context.origDirIsNeg[1] = context.origInvDir.y < 0;
-            context.origDirIsNeg[2] = context.origInvDir.z < 0;
-            
-            return this->processSubtree(t0, t1, 0, context);
-        }
-        
-        return false;
+       return this->processSubtree(0, ray, isect);
     }
     
     
