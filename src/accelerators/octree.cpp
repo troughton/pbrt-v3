@@ -94,7 +94,7 @@ namespace pbrt {
             primitiveBounds = Union(primInfos[i].bounds, primitiveBounds);
         }
         
-        Bounds3f constrainedBounds = pbrt::Intersect(primitiveBounds, bounds);
+        Bounds3f constrainedBounds = bounds; //pbrt::Intersect(primitiveBounds, bounds);
         
         node->bounds = constrainedBounds;
         const Point3f centroid = (constrainedBounds.pMin + constrainedBounds.pMax) * 0.5;
@@ -168,49 +168,187 @@ namespace pbrt {
         return &this->nodesBuffer[index];
     }
     
+    // Octree traversal adapted from https://stackoverflow.com/questions/10228690/ray-octree-intersection-algorithms
     
-    bool OctreeAccel::processSubtree(size_t nodeIndex, const Ray& ray, const Vector3f &invDir,
-                                     const int dirIsNeg[3], SurfaceInteraction *isect) const {
+    struct OctreeAccel::TraversalContext {
+        const Ray& originalRay;
+        uint8_t childMask;
+        Point3f rayOrigin;
+        Vector3f rayInvDir;
+        SurfaceInteraction *isect = nullptr;
+        
+        TraversalContext(const Ray& originalRay) : originalRay(originalRay) { }
+    };
+    
+    size_t OctreeAccel::firstIntersectedNode(Vector3f t0, Vector3f tm) const {
+        uint8_t answer = 0;   // initialize to 00000000
+        // select the entry plane and set bits
+        if (t0.x > t0.y) {
+            if (t0.x > t0.z) { // PLANE YZ
+                if (tm.y < t0.x) { answer |= OctreeChildMask::PosY; }    // set bit at position 1
+                if (tm.z < t0.x) { answer |= OctreeChildMask::PosZ; }    // set bit at position 0
+                return static_cast<size_t>(answer);
+            }
+        } else {
+            if (t0.y > t0.z){ // PLANE XZ
+                if (tm.x < t0.y) { answer |= OctreeChildMask::PosX; }    // set bit at position 2
+                if (tm.z < t0.y) { answer |= OctreeChildMask::PosZ; }    // set bit at position 0
+                return static_cast<size_t>(answer);
+            }
+        }
+        // PLANE XY
+        if (tm.x < t0.z) { answer |= OctreeChildMask::PosX; }    // set bit at position 2
+        if (tm.y < t0.z) { answer |= OctreeChildMask::PosY; }    // set bit at position 1
+        return static_cast<size_t>(answer);
+    }
+    
+    size_t OctreeAccel::newNode(Vector3f tm, size_t x, size_t y, size_t z) const {
+        if (tm.x < tm.y) {
+            if (tm.x < tm.z) { return x; }  // YZ plane
+        } else {
+            if (tm.y < tm.z) { return y; } // XZ plane
+        }
+        return z; // XY plane;
+    }
+    
+    bool OctreeAccel::processSubtree(Vector3f t0, Vector3f t1, size_t nodeIndex, const TraversalContext& traversalContext) const {
+        if (t1.x < 0 || t1.y < 0 || t1.z < 0) { return false; }
+        
         DCHECK(nodeIndex < this->nodesBuffer.size());
         
         const OctreeNode *node = this->nodeAt(nodeIndex);
         
-        if (!node->bounds.IntersectP(ray, invDir, dirIsNeg)) {
-            return false;
-        }
+        Vector3f tm = (t0 + t1) * 0.5;
         
-        bool hit = false;
+        const uint8_t negationMask = traversalContext.childMask;
+        
+        bool innerHit = false;
         
         // Process any primitives within this node.
+        
         for (size_t i = 0; i < node->primitiveCount; i += 1) {
             size_t primitiveIndex = node->primitiveOffset + i;
             const std::shared_ptr<Primitive>& primitive = this->primitives[primitiveIndex];
-            if (isect == nullptr) {
-                hit |= primitive->IntersectP(ray);
+            if (traversalContext.isect == nullptr) {
+                innerHit |= primitive->IntersectP(traversalContext.originalRay);
             } else {
-                hit |= primitive->Intersect(ray, isect);
+                innerHit |= primitive->Intersect(traversalContext.originalRay, traversalContext.isect);
             }
         }
         
         // Traverse its children.
-        for (uint8_t childIndex = 0; childIndex < 8; childIndex += 1) {
+        
+        size_t currentNode = this->firstIntersectedNode(t0, tm);
+        bool childHit = false;
+        
+        do {
+            uint8_t childIndex = currentNode ^ negationMask;
             size_t childNode = node->childIndices[childIndex] + nodeIndex;
-            if (childNode != nodeIndex) { // If the child node is present.
-                hit |= this->processSubtree(childNode, ray, invDir, dirIsNeg, isect);
+            bool childIsPresent = childNode != nodeIndex; // The octree is sparse, so we don't always have every child.
+            
+            switch (currentNode) {
+                case 0: {
+                    if (childIsPresent) { childHit |= this->processSubtree(t0, tm, childNode, traversalContext); }
+                    currentNode = this->newNode(tm, 4, 2, 1);
+                    break;
+                }
+                case 1: {
+                    Vector3f newT1(tm.x, tm.y, t1.z);
+                    if (childIsPresent) { childHit |= this->processSubtree(Vector3f(t0.x, t0.y, tm.z), newT1, childNode, traversalContext); }
+                    currentNode = this->newNode(newT1, 5, 3, 8);
+                    break;
+                }
+                case 2: {
+                    Vector3f newT1(tm.x, t1.y, tm.z);
+                    if (childIsPresent) { childHit |= this->processSubtree(Vector3f(t0.x, tm.y, t0.z), newT1, childNode, traversalContext); }
+                    currentNode = this->newNode(newT1, 6, 8, 3);
+                    break;
+                }
+                case 3: {
+                    Vector3f newT1(tm.x, t1.y, t1.z);
+                    if (childIsPresent) { childHit |= this->processSubtree(Vector3f(t0.x, tm.y, tm.z), newT1, childNode, traversalContext); }
+                    currentNode = this->newNode(newT1, 7, 8, 8);
+                    break;
+                }
+                case 4: {
+                    Vector3f newT1(t1.x, tm.y, tm.z);
+                    if (childIsPresent) { childHit |= this->processSubtree(Vector3f(tm.x, t0.y, t0.z), newT1, childNode, traversalContext); }
+                    currentNode = this->newNode(newT1, 8, 6, 5);
+                    break;
+                }
+                case 5: {
+                    Vector3f newT1(t1.x, tm.y, t1.z);
+                    if (childIsPresent) { childHit |= this->processSubtree(Vector3f(tm.x, t0.y, tm.z), newT1, childNode, traversalContext); }
+                    currentNode = this->newNode(newT1, 8, 7, 8);
+                    break;
+                }
+                case 6: {
+                    Vector3f newT1(t1.x, t1.y, tm.z);
+                    if (childIsPresent) { childHit |= this->processSubtree(Vector3f(tm.x, tm.y, t0.z), newT1, childNode, traversalContext); }
+                    currentNode = this->newNode(newT1, 8, 8, 7);
+                    break;
+                }
+                case 7: {
+                    if (childIsPresent) { childHit |= this->processSubtree(tm, t1, childNode, traversalContext); }
+                    currentNode = 8;
+                    break;
+                }
             }
+            
+        } while (currentNode < 8 && !childHit);
+        
+        return innerHit || childHit;
+    }
+    
+        bool OctreeAccel::traverseOctree(const Ray& ray, SurfaceInteraction *isect) const {
+            if (this->nodesBuffer.empty()) { return false; }
+    
+            uint8_t childMask = 0;
+    
+            Ray tmpRay = ray;
+            // fixes for rays with negative direction
+            if (tmpRay.d.x < 0){
+                tmpRay.o.x = this->centre.x * 2 - ray.o.x;
+                tmpRay.d.x = -ray.d.x;
+                childMask |= 4; // set bit x
+            }
+    
+            if (tmpRay.d.y < 0) {
+                tmpRay.o.y = this->centre.y * 2 - ray.o.y;
+                tmpRay.d.y = -ray.d.y;
+                childMask |= 2; // set bit y
+            }
+    
+            if (tmpRay.d.z < 0) {
+                tmpRay.o.z = this->centre.z * 2 - ray.o.z;
+                tmpRay.d.z = -ray.d.z;
+                childMask |= 1; // set bit z
+            }
+    
+            Vector3f invD = Vector3f(1.0 / std::max(tmpRay.d.x, MachineEpsilon), 1.0 / std::max(tmpRay.d.y, MachineEpsilon), 1.0 / std::max(tmpRay.d.z, MachineEpsilon)); // Add a small epsilon to prevent infinite (and later NaN) values.
+    
+            Vector3f t0 = (this->worldBound.pMin - tmpRay.o);
+            Vector3f t1 = (this->worldBound.pMax - tmpRay.o);
+            t0.x *= invD.x;
+            t1.x *= invD.x;
+            t0.y *= invD.y;
+            t1.y *= invD.y;
+            t0.z *= invD.z;
+            t1.z *= invD.z;
+    
+            if (std::max(std::max(t0.x, t0.y), t0.z) < std::min(std::min(t1.x, t1.y), t1.z)) {
+                TraversalContext context(ray);
+                context.childMask = childMask;
+                context.rayOrigin = tmpRay.o;
+                context.rayInvDir = invD;
+                context.isect = isect;
+    
+                return this->processSubtree(t0, t1, 0, context);
+            }
+    
+            return false;
         }
-        
-        return hit;
-    }
 
-    bool OctreeAccel::traverseOctree(const Ray& ray, SurfaceInteraction *isect) const {
-        if (this->nodesBuffer.empty()) { return false; }
-        
-        Vector3f invDir(1.f / ray.d.x, 1.f / ray.d.y, 1.f / ray.d.z);
-        int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
-        
-        return this->processSubtree(0, ray, invDir, dirIsNeg, isect);
-    }
     
     bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
         ProfilePhase p(Prof::AccelIntersect);
