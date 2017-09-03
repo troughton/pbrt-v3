@@ -95,36 +95,47 @@ namespace pbrt {
         const size_t nodeIndex = this->nextNodeIndex();
         OctreeNode *node = &this->nodesBuffer[nodeIndex];
         
-        node->bounds = bounds;
-        const Point3f centroid = (bounds.pMin + bounds.pMax) * 0.5; // this->computeCentroid(primInfos, primCount);
-        node->centroid = centroid;
+        Bounds3f primitiveBounds = primInfos[0].bounds;
+        
+        for (size_t i = 1; i < primCount; i += 1) {
+            primitiveBounds = Union(primInfos[i].bounds, primitiveBounds);
+        }
+        
+        Bounds3f constrainedBounds = pbrt::Intersect(primitiveBounds, bounds);
+        
+        node->bounds = constrainedBounds;
+        const Point3f centroid = (constrainedBounds.pMin + constrainedBounds.pMax) * 0.5; // this->computeCentroid(primInfos, primCount);
         
         // If we're at the stopping criteria (e.g. primCount <= maxPrimsPerLeaf), stop and fill in the leaf node.
         // Otherwise, split this node into its children.
         // For each child, reorder the primInfos such that the start of the buffer contains only those elements that need to be considered for the current child.
         
-        bool hasSeparatedPrimitives = false;
-        
-        const Float boundsVolume = bounds.Volume();
-        
-//        Interior nodes need to store any primitives whose bounds contain the centre
-        
-        for (size_t i = 0; i < primCount; i += 1) { // Check that there's at least one primitive whose bounds we can refine.
-            const Bounds3f boundsIntersection = pbrt::Intersect(primInfos[i].bounds, bounds);
-            if (std::abs(boundsIntersection.Volume() - boundsVolume) > MachineEpsilon) {
-                hasSeparatedPrimitives = true;
-                break;
-            }
-        }
-        
-        if (!hasSeparatedPrimitives || depth == depthLimit || primCount <= maxPrimsPerNode) {
+        if (constrainedBounds.Volume() < 1e-3 || depth == depthLimit || primCount <= maxPrimsPerNode) {
             // Make this a leaf node.
-            
             node->primitiveCount = primCount;
             node->primitiveOffset = this->addPrimitives(prims, primInfos, primCount);
             
+            for (size_t i = 0; i < 8; i += 1) { // zero out the child indices
+                node->childIndices[i] = 0;
+            }
+            
             return nodeIndex;
         }
+        
+        size_t nodePrimitivesRangeEnd = 0;
+        
+        for (size_t i = 0; i < primCount; i += 1) {
+            if (Inside(centroid, primInfos[i].bounds)) { // then the primitive overlaps all children. Add it to this node instead.
+                std::swap(primInfos[i], primInfos[nodePrimitivesRangeEnd]);
+                nodePrimitivesRangeEnd += 1;
+            }
+        }
+    
+        if (nodePrimitivesRangeEnd > 0) {
+            node->primitiveCount = nodePrimitivesRangeEnd;
+            node->primitiveOffset = this->addPrimitives(prims, primInfos, nodePrimitivesRangeEnd);
+        }
+        
         
         for (size_t child = 0; child < 8; child += 1) {
             bool posX = (child & OctreeChildMask::PosX) != 0;
@@ -135,18 +146,21 @@ namespace pbrt {
             
             const Bounds3f childBounds = Bounds3f(minPoint, maxPoint);
             
-            size_t rangeEndIndex = 0;
+            size_t rangeEndIndex = nodePrimitivesRangeEnd;
             
-            for (size_t i = 0; i < primCount; i += 1) {
+            for (size_t i = nodePrimitivesRangeEnd; i < primCount; i += 1) {
                 if (Overlaps(primInfos[i].bounds, childBounds)) {
                     std::swap(primInfos[i], primInfos[rangeEndIndex]);
                     rangeEndIndex += 1;
                 }
             }
             
-            if (rangeEndIndex > 0) {
-                node->childIndices[child] = this->buildRecursive(childBounds, prims, primInfos, rangeEndIndex, depth + 1) - nodeIndex;
+            size_t rangeSize = rangeEndIndex - nodePrimitivesRangeEnd;
+            
+            if (rangeSize > 0) {
+                size_t childNode = this->buildRecursive(childBounds, prims, &primInfos[nodePrimitivesRangeEnd], rangeSize, depth + 1);
                 node = &this->nodesBuffer[nodeIndex]; // Revalidate our node pointer in case of buffer resizing.
+                node->childIndices[child] = childNode - nodeIndex;
             } else {
                 node->childIndices[child] = 0;
             }
@@ -370,10 +384,10 @@ namespace pbrt {
             }
         }
         
-        // Otherwise, traverse its children.
+        // Traverse its children.
         
         for (uint8_t childIndex = 0; childIndex < 8; childIndex += 1) {
-            size_t childNode = node.childIndices[childIndex] + nodeIndex;
+            size_t childNode = node->childIndices[childIndex] + nodeIndex;
             if (childNode != nodeIndex) { // If the child node is present.
                 hit |= this->processSubtree(t0, t1, childNode, traversalContext);
             }
