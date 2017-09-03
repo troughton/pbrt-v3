@@ -16,7 +16,7 @@
 namespace pbrt {
     
     STAT_COUNTER("Octree/Depth", maxDepth);
-    STAT_RATIO("Octree/Primitives per node", totalPrimitives, totalNodes);
+    STAT_RATIO("Octree/Primitives per leaf node", totalPrimitives, totalLeafNodes);
     
     // OctreeAccel Local Declarations
     struct OctreePrimitiveInfo {
@@ -33,8 +33,9 @@ namespace pbrt {
     struct OctreeNode {
         Bounds3f bounds;
         uint32_t primitiveOffset = 0;
-        uint32_t primitiveCount = 0;
-        uint16_t childIndices[8];
+        uint16_t primitiveCount = 0;
+        uint16_t presentChildren = 0;
+        uint16_t childIndices[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
         
         OctreeNode() { }
     };
@@ -79,8 +80,6 @@ namespace pbrt {
         size_t index = this->nodesBuffer.size();
         this->nodesBuffer.push_back(OctreeNode());
         
-        totalNodes = index + 1;
-        
         return index;
     }
     
@@ -108,27 +107,10 @@ namespace pbrt {
             node->primitiveCount = primCount;
             node->primitiveOffset = this->addPrimitives(prims, primInfos, primCount);
             
-            for (size_t i = 0; i < 8; i += 1) { // zero out the child indices
-                node->childIndices[i] = 0;
-            }
+            totalLeafNodes += 1;
             
             return nodeIndex;
         }
-        
-        size_t nodePrimitivesRangeEnd = 0;
-        
-        for (size_t i = 0; i < primCount; i += 1) {
-            if (Inside(centroid, primInfos[i].bounds)) { // then the primitive overlaps all children. Add it to this node instead.
-                std::swap(primInfos[i], primInfos[nodePrimitivesRangeEnd]);
-                nodePrimitivesRangeEnd += 1;
-            }
-        }
-    
-        if (nodePrimitivesRangeEnd > 0) {
-            node->primitiveCount = nodePrimitivesRangeEnd;
-            node->primitiveOffset = this->addPrimitives(prims, primInfos, nodePrimitivesRangeEnd);
-        }
-        
         
         for (size_t child = 0; child < 8; child += 1) {
             bool posX = (child & OctreeChildMask::PosX) != 0;
@@ -139,23 +121,20 @@ namespace pbrt {
             
             const Bounds3f childBounds = Bounds3f(minPoint, maxPoint);
             
-            size_t rangeEndIndex = nodePrimitivesRangeEnd;
+            size_t rangeEndIndex = 0;
             
-            for (size_t i = nodePrimitivesRangeEnd; i < primCount; i += 1) {
+            for (size_t i = 0; i < primCount; i += 1) {
                 if (Overlaps(primInfos[i].bounds, childBounds)) {
                     std::swap(primInfos[i], primInfos[rangeEndIndex]);
                     rangeEndIndex += 1;
                 }
             }
             
-            size_t rangeSize = rangeEndIndex - nodePrimitivesRangeEnd;
-            
-            if (rangeSize > 0) {
-                size_t childNode = this->buildRecursive(childBounds, prims, &primInfos[nodePrimitivesRangeEnd], rangeSize, depth + 1);
+            if (rangeEndIndex > 0) {
+                size_t childNode = this->buildRecursive(childBounds, prims, primInfos, rangeEndIndex, depth + 1);
                 node = &this->nodesBuffer[nodeIndex]; // Revalidate our node pointer in case of buffer resizing.
                 node->childIndices[child] = childNode - nodeIndex;
-            } else {
-                node->childIndices[child] = 0;
+                node->presentChildren |= 1 << child;
             }
         }
         
@@ -172,6 +151,8 @@ namespace pbrt {
     
     struct OctreeAccel::TraversalContext {
         const Ray& originalRay;
+        Vector3f origInvDir;
+        int origDirIsNeg[3];
         uint8_t childMask;
         Point3f rayOrigin;
         Vector3f rayInvDir;
@@ -211,35 +192,40 @@ namespace pbrt {
         return z; // XY plane;
     }
     
-    bool OctreeAccel::processSubtree(Vector3f t0, Vector3f t1, size_t nodeIndex, const TraversalContext& traversalContext) const {
+    
+    bool OctreeAccel::processSubtree(Vector3f t0, Vector3f t1, size_t nodeIndex, TraversalContext& traversalContext) const {
         if (t1.x < 0 || t1.y < 0 || t1.z < 0) { return false; }
         
-        DCHECK(nodeIndex < this->nodesBuffer.size());
-        
         const OctreeNode *node = this->nodeAt(nodeIndex);
+        
+        if (!node->bounds.IntersectP(traversalContext.originalRay, traversalContext.origInvDir, traversalContext.origDirIsNeg)) {
+            return false;
+        }
         
         Vector3f tm = (t0 + t1) * 0.5;
         
         const uint8_t negationMask = traversalContext.childMask;
         
-        bool innerHit = false;
+        bool hit = false;
         
         // Process any primitives within this node.
-        
-        for (size_t i = 0; i < node->primitiveCount; i += 1) {
-            size_t primitiveIndex = node->primitiveOffset + i;
-            const std::shared_ptr<Primitive>& primitive = this->primitives[primitiveIndex];
-            if (traversalContext.isect == nullptr) {
-                innerHit |= primitive->IntersectP(traversalContext.originalRay);
-            } else {
-                innerHit |= primitive->Intersect(traversalContext.originalRay, traversalContext.isect);
+        if (node->presentChildren == 0) { // It's a leaf node; upgrade its hit type accordingly and return.
+            for (size_t i = 0; i < node->primitiveCount; i += 1) {
+                size_t primitiveIndex = node->primitiveOffset + i;
+                
+                    const std::shared_ptr<Primitive>& primitive = this->primitives[primitiveIndex];
+                    if (traversalContext.isect == nullptr) {
+                        hit |= primitive->IntersectP(traversalContext.originalRay);
+                    } else {
+                        hit |= primitive->Intersect(traversalContext.originalRay, traversalContext.isect);
+                    }
             }
+            return hit;
         }
         
-        // Traverse its children.
+        // Otherwise, traverse its children.
         
         size_t currentNode = this->firstIntersectedNode(t0, tm);
-        bool childHit = false;
         
         do {
             uint8_t childIndex = currentNode ^ negationMask;
@@ -248,60 +234,65 @@ namespace pbrt {
             
             switch (currentNode) {
                 case 0: {
-                    if (childIsPresent) { childHit |= this->processSubtree(t0, tm, childNode, traversalContext); }
+                    if (childIsPresent) { hit |= this->processSubtree(t0, tm, childNode, traversalContext); }
                     currentNode = this->newNode(tm, 4, 2, 1);
                     break;
                 }
                 case 1: {
                     Vector3f newT1(tm.x, tm.y, t1.z);
-                    if (childIsPresent) { childHit |= this->processSubtree(Vector3f(t0.x, t0.y, tm.z), newT1, childNode, traversalContext); }
+                    if (childIsPresent) { hit |= this->processSubtree(Vector3f(t0.x, t0.y, tm.z), newT1, childNode, traversalContext); }
                     currentNode = this->newNode(newT1, 5, 3, 8);
                     break;
                 }
                 case 2: {
                     Vector3f newT1(tm.x, t1.y, tm.z);
-                    if (childIsPresent) { childHit |= this->processSubtree(Vector3f(t0.x, tm.y, t0.z), newT1, childNode, traversalContext); }
+                    if (childIsPresent) { hit |= this->processSubtree(Vector3f(t0.x, tm.y, t0.z), newT1, childNode, traversalContext); }
                     currentNode = this->newNode(newT1, 6, 8, 3);
                     break;
                 }
                 case 3: {
                     Vector3f newT1(tm.x, t1.y, t1.z);
-                    if (childIsPresent) { childHit |= this->processSubtree(Vector3f(t0.x, tm.y, tm.z), newT1, childNode, traversalContext); }
+                    if (childIsPresent) { hit |= this->processSubtree(Vector3f(t0.x, tm.y, tm.z), newT1, childNode, traversalContext); }
                     currentNode = this->newNode(newT1, 7, 8, 8);
                     break;
                 }
                 case 4: {
                     Vector3f newT1(t1.x, tm.y, tm.z);
-                    if (childIsPresent) { childHit |= this->processSubtree(Vector3f(tm.x, t0.y, t0.z), newT1, childNode, traversalContext); }
+                    if (childIsPresent) { hit |= this->processSubtree(Vector3f(tm.x, t0.y, t0.z), newT1, childNode, traversalContext); }
                     currentNode = this->newNode(newT1, 8, 6, 5);
                     break;
                 }
                 case 5: {
                     Vector3f newT1(t1.x, tm.y, t1.z);
-                    if (childIsPresent) { childHit |= this->processSubtree(Vector3f(tm.x, t0.y, tm.z), newT1, childNode, traversalContext); }
+                    if (childIsPresent) { hit |= this->processSubtree(Vector3f(tm.x, t0.y, tm.z), newT1, childNode, traversalContext); }
                     currentNode = this->newNode(newT1, 8, 7, 8);
                     break;
                 }
                 case 6: {
                     Vector3f newT1(t1.x, t1.y, tm.z);
-                    if (childIsPresent) { childHit |= this->processSubtree(Vector3f(tm.x, tm.y, t0.z), newT1, childNode, traversalContext); }
+                    if (childIsPresent) { hit |= this->processSubtree(Vector3f(tm.x, tm.y, t0.z), newT1, childNode, traversalContext); }
                     currentNode = this->newNode(newT1, 8, 8, 7);
                     break;
                 }
                 case 7: {
-                    if (childIsPresent) { childHit |= this->processSubtree(tm, t1, childNode, traversalContext); }
+                    if (childIsPresent) { hit |= this->processSubtree(tm, t1, childNode, traversalContext); }
                     currentNode = 8;
                     break;
                 }
             }
             
-        } while (currentNode < 8 && !childHit);
+        } while (currentNode < 8);
         
-        return innerHit || childHit;
+        return hit;
     }
     
         bool OctreeAccel::traverseOctree(const Ray& ray, SurfaceInteraction *isect) const {
             if (this->nodesBuffer.empty()) { return false; }
+            
+            float ta, tb;
+            if (!this->worldBound.IntersectP(ray, &ta, &tb)) {
+                return false;
+            }
     
             uint8_t childMask = 0;
     
@@ -342,7 +333,12 @@ namespace pbrt {
                 context.rayOrigin = tmpRay.o;
                 context.rayInvDir = invD;
                 context.isect = isect;
-    
+                
+                context.origInvDir = Vector3f(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
+                context.origDirIsNeg[0] = context.origInvDir.x < 0;
+                context.origDirIsNeg[1] = context.origInvDir.y < 0;
+                context.origDirIsNeg[2] = context.origInvDir.z < 0;
+                
                 return this->processSubtree(t0, t1, 0, context);
             }
     

@@ -71,7 +71,7 @@ namespace pbrt {
         
         size_t firstIntersectedNode(Vector3f t0, Vector3f tm) const;
         size_t newNode(Vector3f tm, size_t x, size_t y, size_t z) const;
-        bool processSubtree(Vector3f t0, Vector3f t1, size_t nodeIndex, const TraversalContext& traversalContext) const;
+        bool processSubtree(Vector3f t0, Vector3f t1, size_t nodeIndex, TraversalContext& traversalContext) const;
         
         bool traverseOctree(const Ray& ray, SurfaceInteraction *isect) const;
         inline const OctreeNode* nodeAt(size_t index) const;
