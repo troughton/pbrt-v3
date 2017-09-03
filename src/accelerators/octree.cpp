@@ -53,10 +53,12 @@ namespace pbrt {
         totalPrimitives = primitives.size();
         
         this->primitives.reserve(primitives.size());
-        
         this->nodesBuffer.reserve(2 * primitives.size());
         
         this->buildRecursive(this->worldBound, primitives, primitiveInfo.data(), primitiveInfo.size(), 0);
+        
+        this->primitives.shrink_to_fit();
+        this->nodesBuffer.shrink_to_fit();
     }
     
     OctreeAccel::~OctreeAccel() { }
@@ -111,7 +113,7 @@ namespace pbrt {
             primitiveBounds = Union(primInfos[i].bounds, primitiveBounds);
         }
         
-        Bounds3f constrainedBounds = bounds; // pbrt::Intersect(primitiveBounds, bounds);
+        Bounds3f constrainedBounds = pbrt::Intersect(primitiveBounds, bounds);
         
         node->bounds = constrainedBounds;
         const Point3f centroid = (constrainedBounds.pMin + constrainedBounds.pMax) * 0.5;
@@ -176,7 +178,8 @@ namespace pbrt {
     }
     
     
-    bool OctreeAccel::processSubtree(size_t nodeIndex, const Ray& ray, SurfaceInteraction *isect) const {
+    bool OctreeAccel::processSubtree(size_t nodeIndex, const Ray& ray, const Vector3f &invDir,
+                                     const int dirIsNeg[3], SurfaceInteraction *isect) const {
         const OctreeNode *node = this->nodeAt(nodeIndex);
         
         bool innerHit = false;
@@ -206,7 +209,7 @@ namespace pbrt {
                 size_t childNode = node->childIndices[childIndex] + nodeIndex;
                 bool childIsPresent = childNode != nodeIndex;
                 if (childIsPresent) {
-                    bool intersects = this->nodeAt(childNode)->bounds.IntersectP(ray, &childTMins[childIndex], &childTMaxs[childIndex]);
+                    bool intersects = this->nodeAt(childNode)->bounds.IntersectP(ray, invDir, dirIsNeg, &childTMins[childIndex], &childTMaxs[childIndex]);
                     remainingChildren = (remainingChildren & ~(1 << childIndex)) | ((intersects ? 1 : 0) << childIndex); // zero out any children that don't intersect.
                 }
             }
@@ -229,7 +232,7 @@ namespace pbrt {
                 remainingChildren &= ~(1 << bestChildIndex);
                 if (childTMins[bestChildIndex] < bestTMax) {
                     size_t childNode = node->childIndices[bestChildIndex] + nodeIndex;
-                    if (this->processSubtree(childNode, ray, isect)) {
+                    if (this->processSubtree(childNode, ray, invDir, dirIsNeg, isect)) {
                         childHit = true;
                         bestTMax = std::min(bestTMax, ray.tMax);
                     }
@@ -248,7 +251,10 @@ namespace pbrt {
             return false;
         }
         
-       return this->processSubtree(0, ray, isect);
+        Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
+        int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
+        
+        return this->processSubtree(0, ray, invDir, dirIsNeg, isect);
     }
     
     

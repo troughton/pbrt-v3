@@ -817,6 +817,9 @@ class Bounds3 {
                     Float *hitt1 = nullptr) const;
     inline bool IntersectP(const Ray &ray, const Vector3f &invDir,
                            const int dirIsNeg[3]) const;
+    inline bool IntersectP(const Ray &ray, const Vector3f &invDir,
+                                       const int dirIsNeg[3], Float *hitt0,
+                           Float *hitt1) const;
     friend std::ostream &operator<<(std::ostream &os, const Bounds3<T> &b) {
         os << "[ " << b.pMin << " - " << b.pMax << " ]";
         return os;
@@ -1439,6 +1442,39 @@ inline bool Bounds3<T>::IntersectP(const Ray &ray, const Vector3f &invDir,
     if (tzMax < tMax) tMax = tzMax;
     return (tMin < ray.tMax) && (tMax > 0);
 }
+    
+    template <typename T>
+    inline bool Bounds3<T>::IntersectP(const Ray &ray, const Vector3f &invDir,
+                                       const int dirIsNeg[3], Float *hitt0,
+                                       Float *hitt1) const {
+        const Bounds3f &bounds = *this;
+        // Check for ray intersection against $x$ and $y$ slabs
+        Float tMin = (bounds[dirIsNeg[0]].x - ray.o.x) * invDir.x;
+        Float tMax = (bounds[1 - dirIsNeg[0]].x - ray.o.x) * invDir.x;
+        Float tyMin = (bounds[dirIsNeg[1]].y - ray.o.y) * invDir.y;
+        Float tyMax = (bounds[1 - dirIsNeg[1]].y - ray.o.y) * invDir.y;
+        
+        // Update _tMax_ and _tyMax_ to ensure robust bounds intersection
+        tMax *= 1 + 2 * gamma(3);
+        tyMax *= 1 + 2 * gamma(3);
+        if (tMin > tyMax || tyMin > tMax) return false;
+        if (tyMin > tMin) tMin = tyMin;
+        if (tyMax < tMax) tMax = tyMax;
+        
+        // Check for ray intersection against $z$ slab
+        Float tzMin = (bounds[dirIsNeg[2]].z - ray.o.z) * invDir.z;
+        Float tzMax = (bounds[1 - dirIsNeg[2]].z - ray.o.z) * invDir.z;
+        
+        // Update _tzMax_ to ensure robust bounds intersection
+        tzMax *= 1 + 2 * gamma(3);
+        if (tMin > tzMax || tzMin > tMax) return false;
+        if (tzMin > tMin) tMin = tzMin;
+        if (tzMax < tMax) tMax = tzMax;
+        
+        *hitt0 = tMin;
+        *hitt1 = tMax;
+        return (tMin < ray.tMax) && (tMax > 0);
+    }
 
 inline Point3f OffsetRayOrigin(const Point3f &p, const Vector3f &pError,
                                const Normal3f &n, const Vector3f &w) {
