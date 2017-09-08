@@ -108,15 +108,8 @@ namespace pbrt {
         const size_t nodeIndex = this->nextNodeIndex();
         OctreeNode *node = &this->nodesBuffer[nodeIndex];
         
-        Bounds3f primitiveBounds = primInfos[0].bounds;
-        
-        for (size_t i = 1; i < primCount; i += 1) {
-            primitiveBounds = Union(primInfos[i].bounds, primitiveBounds);
-        }
-        
-        Bounds3f constrainedBounds = pbrt::Intersect(primitiveBounds, bounds);
-        node->bounds = constrainedBounds;
-        const Point3f centroid = (constrainedBounds.pMin + constrainedBounds.pMax) * 0.5;
+        node->bounds = bounds;
+        const Point3f centroid = (node->bounds.pMin + node->bounds.pMax) * 0.5;
         
         // If we're at the stopping criteria (e.g. primCount <= maxPrimsPerLeaf), stop and fill in the leaf node.
         // Otherwise, split this node into its children.
@@ -151,10 +144,13 @@ namespace pbrt {
             
             const Bounds3f childBounds = Bounds3f(minPoint, maxPoint);
             
+            Bounds3f childPrimitiveBounds;
+            
             size_t rangeEndIndex = nodePrimitivesEndIndex;
             
             for (size_t i = nodePrimitivesEndIndex; i < primCount; i += 1) {
                 if (Overlaps(primInfos[i].bounds, childBounds)) {
+                    childPrimitiveBounds = Union(primInfos[i].bounds, childPrimitiveBounds);
                     std::swap(primInfos[i], primInfos[rangeEndIndex]);
                     rangeEndIndex += 1;
                 }
@@ -163,12 +159,16 @@ namespace pbrt {
             size_t rangeSize = rangeEndIndex - nodePrimitivesEndIndex;
             
             if (rangeSize > 0) {
+                Bounds3f constrainedBounds = pbrt::Intersect(childPrimitiveBounds, childBounds);
+                
                 size_t childNode;
                 if (rangeSize == primCount) { // Early out with a leaf node if we're not actually splitting.
                     childNode = this->nextNodeIndex();
-                    this->makeLeaf(&this->nodesBuffer[childNode], prims, &primInfos[nodePrimitivesEndIndex], rangeSize);
+                    OctreeNode *childNodeObj = &this->nodesBuffer[childNode];
+                    childNodeObj->bounds = constrainedBounds;
+                    this->makeLeaf(childNodeObj, prims, &primInfos[nodePrimitivesEndIndex], rangeSize);
                 } else {
-                    childNode = this->buildRecursive(childBounds, prims, &primInfos[nodePrimitivesEndIndex], rangeSize, depth + 1);
+                    childNode = this->buildRecursive(constrainedBounds, prims, &primInfos[nodePrimitivesEndIndex], rangeSize, depth + 1);
                 }
                 
                 node = &this->nodesBuffer[nodeIndex]; // Revalidate our node pointer in case of buffer resizing.
