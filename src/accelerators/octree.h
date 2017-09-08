@@ -68,7 +68,10 @@ namespace pbrt {
         size_t buildRecursive(const Bounds3f bounds, const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount, size_t depth);
         
         
+        bool processSubtreeP(size_t nodeIndex, const Ray& ray, const Vector3f &invDir, const int dirIsNeg[3]) const;
+        
         bool processSubtree(size_t nodeIndex, const Ray& ray, const Vector3f &invDir, const int dirIsNeg[3], SurfaceInteraction *isect) const;
+        
         bool traverseOctree(const Ray& ray, SurfaceInteraction *isect) const;
         inline const OctreeNode* nodeAt(size_t index) const;
         
@@ -78,7 +81,7 @@ namespace pbrt {
         
         Bounds3f worldBound;
         Point3f centre;
-        size_t depthLimit = INTPTR_MAX;
+        size_t depthLimit = 8;
         size_t maxPrimsPerNode = 8;
     };
     

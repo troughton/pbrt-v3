@@ -96,6 +96,7 @@ namespace pbrt {
     
     void OctreeAccel::makeLeaf(OctreeNode* node, const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount) {
         node->presentChildren = 0;
+        
         node->primitiveCount = primCount;
         node->primitiveOffset = this->addPrimitives(prims, primInfos, primCount);
         totalLeafNodes += 1;
@@ -114,7 +115,6 @@ namespace pbrt {
         }
         
         Bounds3f constrainedBounds = pbrt::Intersect(primitiveBounds, bounds);
-        
         node->bounds = constrainedBounds;
         const Point3f centroid = (constrainedBounds.pMin + constrainedBounds.pMax) * 0.5;
         
@@ -122,7 +122,7 @@ namespace pbrt {
         // Otherwise, split this node into its children.
         // For each child, reorder the primInfos such that the start of the buffer contains only those elements that need to be considered for the current child.
         
-        if (constrainedBounds.Volume() < 1e-2 || depth == depthLimit || primCount <= maxPrimsPerNode) {
+        if (depth == depthLimit || primCount <= maxPrimsPerNode) {
             // Make this a leaf node.
             this->makeLeaf(node, prims, primInfos, primCount);
             
@@ -130,14 +130,14 @@ namespace pbrt {
         }
         
         size_t nodePrimitivesEndIndex = 0;
-        
+
         for (size_t i = 0; i < primCount; i += 1) {
             if (Inside(centroid, primInfos[i].bounds)) {
                 std::swap(primInfos[i], primInfos[nodePrimitivesEndIndex]);
                 nodePrimitivesEndIndex += 1;
             }
         }
-        
+
         if (nodePrimitivesEndIndex > 0) {
             this->makeLeaf(node, prims, primInfos, nodePrimitivesEndIndex);
         }
@@ -163,7 +163,14 @@ namespace pbrt {
             size_t rangeSize = rangeEndIndex - nodePrimitivesEndIndex;
             
             if (rangeSize > 0) {
-                size_t childNode = this->buildRecursive(childBounds, prims, &primInfos[nodePrimitivesEndIndex], rangeSize, depth + 1);
+                size_t childNode;
+                if (rangeSize == primCount) { // Early out with a leaf node if we're not actually splitting.
+                    childNode = this->nextNodeIndex();
+                    this->makeLeaf(&this->nodesBuffer[childNode], prims, &primInfos[nodePrimitivesEndIndex], rangeSize);
+                } else {
+                    childNode = this->buildRecursive(childBounds, prims, &primInfos[nodePrimitivesEndIndex], rangeSize, depth + 1);
+                }
+                
                 node = &this->nodesBuffer[nodeIndex]; // Revalidate our node pointer in case of buffer resizing.
                 node->childIndices[child] = childNode - nodeIndex;
                 node->presentChildren |= 1 << child;
@@ -177,12 +184,9 @@ namespace pbrt {
         return &this->nodesBuffer[index];
     }
     
-    
-    bool OctreeAccel::processSubtree(size_t nodeIndex, const Ray& ray, const Vector3f &invDir,
-                                     const int dirIsNeg[3], SurfaceInteraction *isect) const {
+    bool OctreeAccel::processSubtreeP(size_t nodeIndex, const Ray& ray, const Vector3f &invDir,
+                                     const int dirIsNeg[3]) const {
         const OctreeNode *node = this->nodeAt(nodeIndex);
-        
-        bool innerHit = false;
         
         // Check any primitives within the node.
         
@@ -190,14 +194,8 @@ namespace pbrt {
             size_t primitiveIndex = node->primitiveOffset + i;
             
             const std::shared_ptr<Primitive>& primitive = this->primitives[primitiveIndex];
-            if (isect == nullptr) {
-                innerHit |= primitive->IntersectP(ray);
-            } else {
-                innerHit |= primitive->Intersect(ray, isect);
-            }
+            if (primitive->IntersectP(ray)) { return true; }
         }
-        
-        bool childHit = false;
         
         if (node->presentChildren != 0) { // Traverse its children.
             
@@ -232,6 +230,66 @@ namespace pbrt {
                 remainingChildren &= ~(1 << bestChildIndex);
                 if (childTMins[bestChildIndex] < bestTMax) {
                     size_t childNode = node->childIndices[bestChildIndex] + nodeIndex;
+                    if (this->processSubtreeP(childNode, ray, invDir, dirIsNeg)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    bool OctreeAccel::processSubtree(size_t nodeIndex, const Ray& ray, const Vector3f &invDir,
+                                     const int dirIsNeg[3], SurfaceInteraction *isect) const {
+        const OctreeNode *node = this->nodeAt(nodeIndex);
+        
+        bool innerHit = false;
+        
+        // Check any primitives within the node.
+        
+        for (size_t i = 0; i < node->primitiveCount; i += 1) {
+            size_t primitiveIndex = node->primitiveOffset + i;
+            
+            const std::shared_ptr<Primitive>& primitive = this->primitives[primitiveIndex];
+            innerHit |= primitive->Intersect(ray, isect);
+        }
+        
+        bool childHit = false;
+        
+        if (node->presentChildren != 0) { // Traverse its children.
+
+            uint8_t remainingChildren = node->presentChildren;
+            float childTMins[8];
+            float childTMaxs[8];
+
+            for (size_t childIndex = 0; childIndex < 8; childIndex += 1) {
+                size_t childNode = node->childIndices[childIndex] + nodeIndex;
+                bool childIsPresent = childNode != nodeIndex;
+                if (childIsPresent) {
+                    bool intersects = this->nodeAt(childNode)->bounds.IntersectP(ray, invDir, dirIsNeg, &childTMins[childIndex], &childTMaxs[childIndex]);
+                    remainingChildren = (remainingChildren & ~(1 << childIndex)) | ((intersects ? 1 : 0) << childIndex); // zero out any children that don't intersect.
+                }
+            }
+
+            float bestTMax = ray.tMax;
+            while (remainingChildren != 0) {
+
+                float bestTMin = std::numeric_limits<float>::infinity();
+                size_t bestChildIndex = 0;
+
+                for (size_t childIndex = 0; childIndex < 8; childIndex += 1) {
+                    if ((remainingChildren & (1 << childIndex)) == 0) { continue; }
+                    if (childTMins[childIndex] < bestTMin) {
+                        bestTMin = childTMins[childIndex];
+                        bestChildIndex = childIndex;
+                    }
+                }
+
+                // Process that child.
+                remainingChildren &= ~(1 << bestChildIndex);
+                if (childTMins[bestChildIndex] < bestTMax) {
+                    size_t childNode = node->childIndices[bestChildIndex] + nodeIndex;
                     if (this->processSubtree(childNode, ray, invDir, dirIsNeg, isect)) {
                         childHit = true;
                         bestTMax = std::min(bestTMax, ray.tMax);
@@ -254,7 +312,7 @@ namespace pbrt {
         Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
         int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
         
-        return this->processSubtree(0, ray, invDir, dirIsNeg, isect);
+        return isect == nullptr ? this->processSubtreeP(0, ray, invDir, dirIsNeg) : this->processSubtree(0, ray, invDir, dirIsNeg, isect);
     }
     
     
