@@ -539,9 +539,9 @@ std::shared_ptr<Texture<Spectrum>> MakeSpectrumTexture(
     else if (name == "fbm")
         tex = CreateFBmSpectrumTexture(tex2world, tp);
     else if (name == "wrinkled")
-        tex = CreateWoodSpectrumTexture(tex2world, tp);
-    else if (name == "wood")
         tex = CreateWrinkledSpectrumTexture(tex2world, tp);
+    else if (name == "wood")
+        tex = CreateWoodSpectrumTexture(tex2world, tp);
     else if (name == "marble")
         tex = CreateMarbleSpectrumTexture(tex2world, tp);
     else if (name == "windy")

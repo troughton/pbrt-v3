@@ -81,8 +81,8 @@ namespace pbrt {
         
         Bounds3f worldBound;
         Point3f centre;
-        size_t depthLimit = 8;
-        size_t maxPrimsPerNode = 8;
+        size_t depthLimit;
+        size_t maxPrimsPerNode;
     };
     
     std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(

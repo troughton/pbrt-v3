@@ -200,8 +200,8 @@ namespace pbrt {
         if (node->presentChildren != 0) { // Traverse its children.
             
             uint8_t remainingChildren = node->presentChildren;
-            float childTMins[8];
-            float childTMaxs[8];
+            Float childTMins[8];
+            Float childTMaxs[8];
             
             for (size_t childIndex = 0; childIndex < 8; childIndex += 1) {
                 size_t childNode = node->childIndices[childIndex] + nodeIndex;
@@ -212,10 +212,10 @@ namespace pbrt {
                 }
             }
             
-            float bestTMax = ray.tMax;
+            Float bestTMax = ray.tMax;
             while (remainingChildren != 0) {
                 
-                float bestTMin = std::numeric_limits<float>::infinity();
+                Float bestTMin = std::numeric_limits<Float>::infinity();
                 size_t bestChildIndex = 0;
                 
                 for (size_t childIndex = 0; childIndex < 8; childIndex += 1) {
@@ -260,8 +260,8 @@ namespace pbrt {
         if (node->presentChildren != 0) { // Traverse its children.
 
             uint8_t remainingChildren = node->presentChildren;
-            float childTMins[8];
-            float childTMaxs[8];
+            Float childTMins[8];
+            Float childTMaxs[8];
 
             for (size_t childIndex = 0; childIndex < 8; childIndex += 1) {
                 size_t childNode = node->childIndices[childIndex] + nodeIndex;
@@ -272,10 +272,10 @@ namespace pbrt {
                 }
             }
 
-            float bestTMax = ray.tMax;
+            Float bestTMax = ray.tMax;
             while (remainingChildren != 0) {
 
-                float bestTMin = std::numeric_limits<float>::infinity();
+                Float bestTMin = std::numeric_limits<Float>::infinity();
                 size_t bestChildIndex = 0;
 
                 for (size_t childIndex = 0; childIndex < 8; childIndex += 1) {
@@ -304,7 +304,7 @@ namespace pbrt {
     bool OctreeAccel::traverseOctree(const Ray& ray, SurfaceInteraction *isect) const {
         if (this->nodesBuffer.empty()) { return false; }
         
-        float ta, tb;
+        Float ta, tb;
         if (!this->worldBound.IntersectP(ray, &ta, &tb)) {
             return false;
         }
