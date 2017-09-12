@@ -53,7 +53,7 @@ namespace pbrt {
         };
         
         // OctreeAccel Public Methods
-        OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &p);
+        OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &p, size_t depthLimit, size_t maxPrimsPerNode);
         Bounds3f WorldBound() const;
         ~OctreeAccel();
         bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;

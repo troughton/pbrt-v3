@@ -40,7 +40,7 @@ namespace pbrt {
         OctreeNode() { }
     };
     
-    OctreeAccel::OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &primitives) {
+    OctreeAccel::OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &primitives, size_t depthLimit, size_t maxPrimsPerNode) : depthLimit(depthLimit), maxPrimsPerNode(maxPrimsPerNode) {
         ProfilePhase _(Prof::AccelConstruction);
         
         // Initialize _primitiveInfo_ array for primitives
@@ -328,7 +328,9 @@ namespace pbrt {
     
     std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(
                                                          const std::vector<std::shared_ptr<Primitive>> &prims, const ParamSet &ps) {
-        return std::make_shared<OctreeAccel>(prims);
+        size_t depthLimit = ps.FindOneInt("depthLimit", 8);
+        size_t maxPrimsPerNode = ps.FindOneInt("maxPrimsPerNode", 8);
+        return std::make_shared<OctreeAccel>(prims, depthLimit, maxPrimsPerNode);
     }
     
 }  // namespace pbrt
