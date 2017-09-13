@@ -35,21 +35,12 @@
 #include "textures/wood.h"
 
 namespace pbrt {
-
-// WoodTexture Method Definitions
-WoodTexture<Float> *CreateWoodFloatTexture(const Transform &tex2world,
-                                                   const TextureParams &tp) {
-    // Initialize 3D texture mapping _map_ from _tp_
-    std::unique_ptr<TextureMapping3D> map(new IdentityMapping3D(tex2world));
-    return new WoodTexture<Float>(std::move(map), tp.FindInt("octaves", 8),
-                                      tp.FindFloat("roughness", .5f));
-}
-
-WoodTexture<Spectrum> *CreateWoodSpectrumTexture(
+    
+WoodTexture*CreateWoodSpectrumTexture(
     const Transform &tex2world, const TextureParams &tp) {
     // Initialize 3D texture mapping _map_ from _tp_
     std::unique_ptr<TextureMapping3D> map(new IdentityMapping3D(tex2world));
-    return new WoodTexture<Spectrum>(std::move(map),
+    return new WoodTexture(std::move(map),
                                          tp.FindInt("octaves", 8),
                                          tp.FindFloat("roughness", .5f));
 }

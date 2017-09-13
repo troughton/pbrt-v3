@@ -502,8 +502,6 @@ std::shared_ptr<Texture<Float>> MakeFloatTexture(const std::string &name,
         tex = CreateFBmFloatTexture(tex2world, tp);
     else if (name == "wrinkled")
         tex = CreateWrinkledFloatTexture(tex2world, tp);
-    else if (name == "wood")
-        tex = CreateWoodFloatTexture(tex2world, tp);
     else if (name == "marble")
         tex = CreateMarbleFloatTexture(tex2world, tp);
     else if (name == "windy")

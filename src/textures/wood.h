@@ -43,24 +43,56 @@
 #include "texture.h"
 #include "paramset.h"
 
+// Original inspiration: https://www.shadertoy.com/view/ldscDM
+
 namespace pbrt {
+    inline Float repramp(Float x) {
+        return pow(sin(x)*0.5+0.5, 8.0) + cos(x)*0.7 + 0.7;
+    }
 
 // WoodTexture Declarations
-template <typename T>
-class WoodTexture : public Texture<T> {
+class WoodTexture : public Texture<Spectrum> {
   public:
     // WoodTexture Public Methods
     WoodTexture(std::unique_ptr<TextureMapping3D> mapping, int octaves,
                     Float omega)
         : mapping(std::move(mapping)), octaves(octaves), omega(omega) {}
-    T Evaluate(const SurfaceInteraction &si) const {
+    Spectrum Evaluate(const SurfaceInteraction &si) const {
         Vector3f dpdx, dpdy;
-        Point3f p = mapping->Map(si, &dpdx, &dpdy);
-
-        return (1 + sin( (p.x + Noise(p.x, p.y, p.z) * 2 ) * 2) ) / 2;
-//        return (1 + sin( (p.x + Noise(p.x * 5, p.y * 5, p.z * 5) / 2 ) * 50) ) / 2;
+        Point3f mappedPoint = mapping->Map(si, &dpdx, &dpdy);
         
-//        return Noise(p) + Turbulence(p, dpdx, dpdy, omega, octaves) + FBm(p, dpdx, dpdy, omega, octaves);
+        Point3f p(mappedPoint.x * 0.05, mappedPoint.y * 0.05, mappedPoint.z * 0.05);
+        
+        auto noise1 = Noise(p.x * 8, p.y * 1.5, p.z * 8);
+        auto noise2 = Noise(-p.x * 8 + 4.5678, -p.y * 1.5 + 4.5678, -p.z * 8 + 4.5678);
+        
+        auto posXZ = Vector2f(p.y, p.x);
+        
+        float rings = repramp((posXZ + Vector2f(noise1, noise2) * 0.05).Length() * 64.0) / 1.8;
+        rings -= Noise(p.x, p.y, p.z) * 0.75;
+        
+        float colourA[3] = { 0.3, 0.19, 0.075 };
+        float colourB[3] = { 1.0, 0.73, 0.326 };
+    
+        Spectrum texColour = Lerp(rings, Spectrum::FromRGB(colourA) * 0.95, Spectrum::FromRGB(colourB) * 0.4) * 1.5;
+        texColour = texColour.Clamp();
+        float rough = (Noise(p.x * 64.0, p.y * 12.8, p.z * 64) * 0.1 + 0.9);
+        texColour *= rough;
+        
+        // Add detail noise:
+        Float detail = Turbulence(mappedPoint, dpdx, dpdy, 0.9, 12);
+        texColour = texColour + 0.1 * Spectrum(detail - 0.5);
+        
+        // Add dark lines
+        
+        Point3f linesP(mappedPoint.x * 0.08 - 0.2 * rings, mappedPoint.y - noise1, mappedPoint.z + 0.2 * noise2);
+        if (FBm(linesP, dpdx, dpdy, 1.5, 11) > 0.998) {
+            texColour = Lerp(1 - (rings * 0.7 + 0.3), Spectrum::FromRGB(colourA) * 0.95, Spectrum::FromRGB(colourB) * 0.4);
+        }
+        
+        texColour = texColour.Clamp(0, 1);
+        
+        return texColour;
     }
 
   private:
@@ -70,9 +102,7 @@ class WoodTexture : public Texture<T> {
     Float omega;
 };
 
-WoodTexture<Float> *CreateWoodFloatTexture(const Transform &tex2world,
-                                                   const TextureParams &tp);
-WoodTexture<Spectrum> *CreateWoodSpectrumTexture(
+WoodTexture *CreateWoodSpectrumTexture(
     const Transform &tex2world, const TextureParams &tp);
 
 }  // namespace pbrt
