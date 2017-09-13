@@ -60,7 +60,7 @@ namespace pbrt {
         this->primitives.shrink_to_fit();
         this->nodesBuffer.shrink_to_fit();
         
-        totalMemory = this->primitives.capacity() * sizeof(std::shared_ptr<Primitive>) + this->nodesBuffer.capacity() * sizeof(OctreeNode);
+        totalMemory += this->primitives.capacity() * sizeof(std::shared_ptr<Primitive>) + this->nodesBuffer.capacity() * sizeof(OctreeNode);
     }
     
     OctreeAccel::~OctreeAccel() { }
