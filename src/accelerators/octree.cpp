@@ -35,12 +35,12 @@ namespace pbrt {
         uint32_t primitiveOffset = 0;
         uint16_t primitiveCount = 0;
         uint16_t presentChildren = 0;
-        uint16_t childIndices[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+        uint32_t childIndices[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
         
         OctreeNode() { }
     };
     
-    OctreeAccel::OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &primitives, size_t depthLimit, size_t maxPrimsPerNode) : depthLimit(depthLimit), maxPrimsPerNode(maxPrimsPerNode) {
+    OctreeAccel::OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &primitives, SplitMethod splitMethod, size_t depthLimit, size_t maxPrimsPerNode) : depthLimit(depthLimit), maxPrimsPerNode(maxPrimsPerNode), splitMethod(splitMethod) {
         ProfilePhase _(Prof::AccelConstruction);
         
         // Initialize _primitiveInfo_ array for primitives
@@ -109,7 +109,16 @@ namespace pbrt {
         OctreeNode *node = &this->nodesBuffer[nodeIndex];
         
         node->bounds = bounds;
-        const Point3f centroid = (node->bounds.pMin + node->bounds.pMax) * 0.5;
+        Point3f centroid;
+        if (this->splitMethod == SplitMethod::Equal || this->splitMethod == SplitMethod::PrimitiveBoundsCentre) {
+            centroid = (node->bounds.pMin + node->bounds.pMax) * 0.5;
+        } else {
+            Point3f primsCentroid = primInfos[0].centroid;
+            for (size_t i = 1; i < primCount; i += 1) {
+                primsCentroid += primInfos[i].centroid;
+            }
+            centroid = primsCentroid / primCount;
+        }
         
         // If we're at the stopping criteria (e.g. primCount <= maxPrimsPerLeaf), stop and fill in the leaf node.
         // Otherwise, split this node into its children.
@@ -145,12 +154,17 @@ namespace pbrt {
             const Bounds3f childBounds = Bounds3f(minPoint, maxPoint);
             
             Bounds3f childPrimitiveBounds;
+            if (this->splitMethod == SplitMethod::Equal) {
+                childPrimitiveBounds = childBounds;
+            }
             
             size_t rangeEndIndex = nodePrimitivesEndIndex;
             
             for (size_t i = nodePrimitivesEndIndex; i < primCount; i += 1) {
                 if (Overlaps(primInfos[i].bounds, childBounds)) {
-                    childPrimitiveBounds = Union(primInfos[i].bounds, childPrimitiveBounds);
+                    if (this->splitMethod != SplitMethod::Equal) {
+                        childPrimitiveBounds = Union(primInfos[i].bounds, childPrimitiveBounds);
+                    }
                     std::swap(primInfos[i], primInfos[rangeEndIndex]);
                     rangeEndIndex += 1;
                 }
@@ -328,9 +342,25 @@ namespace pbrt {
     
     std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(
                                                          const std::vector<std::shared_ptr<Primitive>> &prims, const ParamSet &ps) {
+        
+        std::string splitMethodName = ps.FindOneString("splitmethod", "primboundscentre");
+        OctreeAccel::SplitMethod splitMethod;
+        if (splitMethodName == "primboundscentre") {
+            splitMethod = OctreeAccel::SplitMethod::PrimitiveBoundsCentre;
+        } else if (splitMethodName == "primcentroid") {
+            splitMethod = OctreeAccel::SplitMethod::PrimitiveCentroid;
+        } else if (splitMethodName == "equal") {
+            splitMethod = OctreeAccel::SplitMethod::Equal;
+        } else {
+            Warning("Octree split method \"%s\" unknown.  Using \"primboundscentre\".",
+                    splitMethodName.c_str());
+            splitMethod = OctreeAccel::SplitMethod::PrimitiveBoundsCentre;
+        }
+
+        
         size_t depthLimit = ps.FindOneInt("depthLimit", 8);
         size_t maxPrimsPerNode = ps.FindOneInt("maxPrimsPerNode", 8);
-        return std::make_shared<OctreeAccel>(prims, depthLimit, maxPrimsPerNode);
+        return std::make_shared<OctreeAccel>(prims, splitMethod, depthLimit, maxPrimsPerNode);
     }
     
 }  // namespace pbrt

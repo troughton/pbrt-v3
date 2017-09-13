@@ -29,6 +29,8 @@ namespace pbrt {
     public:
         // OctreeAccel Public Types
         
+        enum class SplitMethod { Equal, PrimitiveBoundsCentre, PrimitiveCentroid };
+        
         enum class OctreeChild : uint8_t {
             // PosX means bit 2 is set
             // PosY means bit 1 is set
@@ -53,7 +55,7 @@ namespace pbrt {
         };
         
         // OctreeAccel Public Methods
-        OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &p, size_t depthLimit = 8, size_t maxPrimsPerNode = 8);
+        OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &p, SplitMethod splitMethod = SplitMethod::PrimitiveBoundsCentre, size_t depthLimit = 8, size_t maxPrimsPerNode = 8);
         Bounds3f WorldBound() const;
         ~OctreeAccel();
         bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
@@ -83,6 +85,7 @@ namespace pbrt {
         Point3f centre;
         size_t depthLimit;
         size_t maxPrimsPerNode;
+        SplitMethod splitMethod;
     };
     
     std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(
