@@ -175,16 +175,8 @@ namespace pbrt {
             if (rangeSize > 0) {
                 Bounds3f constrainedBounds = pbrt::Intersect(childPrimitiveBounds, childBounds);
                 
-                size_t childNode;
-                if (rangeSize == primCount) { // Early out with a leaf node if we're not actually splitting.
-                    childNode = this->nextNodeIndex();
-                    OctreeNode *childNodeObj = &this->nodesBuffer[childNode];
-                    childNodeObj->bounds = constrainedBounds;
-                    this->makeLeaf(childNodeObj, prims, &primInfos[nodePrimitivesEndIndex], rangeSize);
-                } else {
-                    childNode = this->buildRecursive(constrainedBounds, prims, &primInfos[nodePrimitivesEndIndex], rangeSize, depth + 1);
-                }
-                
+                size_t childNode = this->buildRecursive(constrainedBounds, prims, &primInfos[nodePrimitivesEndIndex], rangeSize, depth + 1);
+            
                 node = &this->nodesBuffer[nodeIndex]; // Revalidate our node pointer in case of buffer resizing.
                 node->childIndices[child] = childNode - nodeIndex;
                 node->presentChildren |= 1 << child;
@@ -358,7 +350,7 @@ namespace pbrt {
         }
 
         
-        size_t depthLimit = ps.FindOneInt("depthLimit", 8);
+        size_t depthLimit = ps.FindOneInt("depthLimit", 16);
         size_t maxPrimsPerNode = ps.FindOneInt("maxPrimsPerNode", 8);
         return std::make_shared<OctreeAccel>(prims, splitMethod, depthLimit, maxPrimsPerNode);
     }
