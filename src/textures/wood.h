@@ -56,7 +56,11 @@ class WoodTexture : public Texture<T> {
     T Evaluate(const SurfaceInteraction &si) const {
         Vector3f dpdx, dpdy;
         Point3f p = mapping->Map(si, &dpdx, &dpdy);
-        return Turbulence(p, dpdx, dpdy, omega, octaves);
+
+        return (1 + sin( (p.x + Noise(p.x, p.y, p.z) * 2 ) * 2) ) / 2;
+//        return (1 + sin( (p.x + Noise(p.x * 5, p.y * 5, p.z * 5) / 2 ) * 50) ) / 2;
+        
+//        return Noise(p) + Turbulence(p, dpdx, dpdy, omega, octaves) + FBm(p, dpdx, dpdy, omega, octaves);
     }
 
   private:

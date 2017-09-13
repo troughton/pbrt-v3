@@ -53,14 +53,14 @@ namespace pbrt {
         };
         
         // OctreeAccel Public Methods
-        OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &p, size_t depthLimit, size_t maxPrimsPerNode);
+        OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &p, size_t depthLimit = 8, size_t maxPrimsPerNode = 8);
         Bounds3f WorldBound() const;
         ~OctreeAccel();
         bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
         bool IntersectP(const Ray &ray) const;
         
     private:
-        // BVHAccel Private Methods
+        // OctreeAccel Private Methods
         
         size_t addPrimitives(const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount);
         size_t nextNodeIndex();
@@ -75,7 +75,7 @@ namespace pbrt {
         bool traverseOctree(const Ray& ray, SurfaceInteraction *isect) const;
         inline const OctreeNode* nodeAt(size_t index) const;
         
-        // BVHAccel Private Data
+        // OctreeAccel Private Data
         std::vector<std::shared_ptr<Primitive>> primitives;
         std::vector<OctreeNode> nodesBuffer;
         
