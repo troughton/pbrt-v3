@@ -216,9 +216,9 @@ namespace pbrt {
             Float childTMaxs[8];
             
             for (size_t childIndex = 0; childIndex < 8; childIndex += 1) {
-                size_t childNode = node->childIndices[childIndex] + nodeIndex;
-                bool childIsPresent = childNode != nodeIndex;
+                bool childIsPresent = (node->presentChildren & (1 << childIndex)) != 0;
                 if (childIsPresent) {
+                    size_t childNode = node->childIndices[childIndex] + nodeIndex;
                     bool intersects = this->nodeAt(childNode)->bounds.IntersectP(ray, invDir, dirIsNeg, &childTMins[childIndex], &childTMaxs[childIndex]);
                     remainingChildren = (remainingChildren & ~(1 << childIndex)) | ((intersects ? 1 : 0) << childIndex); // zero out any children that don't intersect.
                 }
@@ -265,9 +265,9 @@ namespace pbrt {
             Float childTMaxs[8];
 
             for (size_t childIndex = 0; childIndex < 8; childIndex += 1) {
-                size_t childNode = node->childIndices[childIndex] + nodeIndex;
-                bool childIsPresent = childNode != nodeIndex;
+                bool childIsPresent = (node->presentChildren & (1 << childIndex)) != 0;
                 if (childIsPresent) {
+                    size_t childNode = node->childIndices[childIndex] + nodeIndex;
                     bool intersects = this->nodeAt(childNode)->bounds.IntersectP(ray, invDir, dirIsNeg, &childTMins[childIndex], &childTMaxs[childIndex]);
                     remainingChildren = (remainingChildren & ~(1 << childIndex)) | ((intersects ? 1 : 0) << childIndex); // zero out any children that don't intersect.
                 }
