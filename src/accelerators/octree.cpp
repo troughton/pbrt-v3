@@ -17,6 +17,8 @@ namespace pbrt {
     
     STAT_COUNTER("Octree/Depth", maxDepth);
     STAT_RATIO("Octree/Primitives per leaf node", totalPrimitives, totalLeafNodes);
+    STAT_RATIO("Octree/Children per interior node", totalChildren, totalInteriorNodes);
+    STAT_MEMORY_COUNTER("Memory/Octree", totalMemory);
     
     // OctreeAccel Local Declarations
     struct OctreePrimitiveInfo {
@@ -50,8 +52,6 @@ namespace pbrt {
             this->worldBound = Union(this->worldBound, primitiveInfo[i].bounds);
         }
         
-        totalPrimitives = primitives.size();
-        
         this->primitives.reserve(primitives.size());
         this->nodesBuffer.reserve(2 * primitives.size());
         
@@ -59,6 +59,8 @@ namespace pbrt {
         
         this->primitives.shrink_to_fit();
         this->nodesBuffer.shrink_to_fit();
+        
+        totalMemory = this->primitives.capacity() * sizeof(std::shared_ptr<Primitive>) + this->nodesBuffer.capacity() * sizeof(OctreeNode);
     }
     
     OctreeAccel::~OctreeAccel() { }
@@ -99,6 +101,7 @@ namespace pbrt {
         
         node->primitiveCount = primCount;
         node->primitiveOffset = this->addPrimitives(prims, primInfos, primCount);
+        totalPrimitives += primCount;
         totalLeafNodes += 1;
     }
     
@@ -180,8 +183,12 @@ namespace pbrt {
                 node = &this->nodesBuffer[nodeIndex]; // Revalidate our node pointer in case of buffer resizing.
                 node->childIndices[child] = childNode - nodeIndex;
                 node->presentChildren |= 1 << child;
+                
+                totalChildren += 1;
             }
         }
+        
+        totalInteriorNodes += 1;
         
         return nodeIndex;
     }
@@ -195,7 +202,6 @@ namespace pbrt {
         const OctreeNode *node = this->nodeAt(nodeIndex);
         
         // Check any primitives within the node.
-        
         for (size_t i = 0; i < node->primitiveCount; i += 1) {
             size_t primitiveIndex = node->primitiveOffset + i;
             
@@ -250,17 +256,6 @@ namespace pbrt {
                                      const int dirIsNeg[3], SurfaceInteraction *isect) const {
         const OctreeNode *node = this->nodeAt(nodeIndex);
         
-        bool innerHit = false;
-        
-        // Check any primitives within the node.
-        
-        for (size_t i = 0; i < node->primitiveCount; i += 1) {
-            size_t primitiveIndex = node->primitiveOffset + i;
-            
-            const std::shared_ptr<Primitive>& primitive = this->primitives[primitiveIndex];
-            innerHit |= primitive->Intersect(ray, isect);
-        }
-        
         bool childHit = false;
         
         if (node->presentChildren != 0) { // Traverse its children.
@@ -303,6 +298,18 @@ namespace pbrt {
                 }
             }
         }
+        
+        bool innerHit = false;
+        
+        // Check any primitives within the node.
+        
+        for (size_t i = 0; i < node->primitiveCount; i += 1) {
+            size_t primitiveIndex = node->primitiveOffset + i;
+            
+            const std::shared_ptr<Primitive>& primitive = this->primitives[primitiveIndex];
+            innerHit |= primitive->Intersect(ray, isect);
+        }
+        
         
         return childHit || innerHit;
     }
@@ -350,8 +357,8 @@ namespace pbrt {
         }
 
         
-        size_t depthLimit = ps.FindOneInt("depthLimit", 16);
-        size_t maxPrimsPerNode = ps.FindOneInt("maxPrimsPerNode", 8);
+        size_t depthLimit = ps.FindOneInt("depthLimit", 14);
+        size_t maxPrimsPerNode = ps.FindOneInt("maxPrimsPerNode", 4);
         return std::make_shared<OctreeAccel>(prims, splitMethod, depthLimit, maxPrimsPerNode);
     }
     
