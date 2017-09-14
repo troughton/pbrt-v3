@@ -54,8 +54,9 @@ namespace pbrt {
 class WoodTexture : public Texture<Spectrum> {
   public:
     // WoodTexture Public Methods
-    WoodTexture(std::unique_ptr<TextureMapping3D> mapping, const Spectrum& colourA, const Spectrum& colourB)
-        : mapping(std::move(mapping)), colourA(colourA), colourB(colourB) {}
+    WoodTexture(std::unique_ptr<TextureMapping3D> mapping, const Spectrum& woodColour, const Spectrum& ringColour, const Float ringNoisiness, const Float ringDetail, const Float ringSpacing, const Float fleckIntensity)
+    : mapping(std::move(mapping)), woodColour(woodColour), ringColour(ringColour), ringNoisiness(ringNoisiness), ringDetail(ringDetail), ringSpacing(ringSpacing), fleckIntensity(fleckIntensity) {}
+    
     Spectrum Evaluate(const SurfaceInteraction &si) const {
         Vector3f dpdx, dpdy;
         Point3f mappedPoint = mapping->Map(si, &dpdx, &dpdy);
@@ -66,26 +67,28 @@ class WoodTexture : public Texture<Spectrum> {
         auto noise2 = Noise(-p.x * 8 + 4.5678, -p.y * 1.5 + 4.5678, -p.z * 8 + 4.5678);
         auto noise3 = Noise(p.x * 64.0, p.y * 12.8, p.z * 64);
         
-        auto posYX = Vector2f(p.y, p.x);
+        auto posYX = Vector2f(p.y, p.x) * 5 * (1 - ringSpacing);
         
-        Float rings = repramp((posYX + Vector2f(noise1, noise2) * 0.05).Length() * 64.0) / 1.8;
+        Float rings = repramp((posYX + Vector2f(noise1, noise2) * 0.1 * ringNoisiness).Length() * 64.0) / 1.8;
         rings -= Noise(p.x, p.y, p.z) * 0.75;
         
-        Spectrum texColour = Lerp(rings, colourA, colourB);
+        Spectrum texColour = Lerp(rings, ringColour, woodColour);
         texColour = texColour.Clamp();
-        float rough = (noise3 * 0.1 + 0.9);
-        texColour *= rough;
         
-        // Add detail noise:
+        float noisyRoughness = noise3 * 0.1 + 0.9;
+        texColour *= noisyRoughness;
+        
+        // Add detail noise to the rings:
         Float detail = Turbulence(mappedPoint, dpdx, dpdy, 0.9, 12);
-        texColour = texColour + 0.1 * Spectrum(detail - 0.5);
+        texColour = texColour + 0.1 * ringDetail * (1 - rings) * Spectrum(detail - 1.0);
         
         // Add dark lines
-        
         Point3f linesP(mappedPoint.x * 0.08 - 0.2 * rings, mappedPoint.y - noise1, mappedPoint.z + 0.2 * noise2);
+        Spectrum fleckColour = texColour;
         if (FBm(linesP, dpdx, dpdy, 1.5, 11) > 0.998) {
-            texColour = Lerp(1 - (rings * 0.7 + 0.3), colourA, colourB) * 0.66;
+            fleckColour = Lerp(1 - (rings * 0.7 + 0.3), ringColour, woodColour) * 0.66;
         }
+        texColour = Lerp(this->fleckIntensity, texColour, fleckColour);
         
         texColour = texColour.Clamp(0, 1);
         
@@ -95,7 +98,8 @@ class WoodTexture : public Texture<Spectrum> {
   private:
     // WoodTexture Private Data
     std::unique_ptr<TextureMapping3D> mapping;
-    const Spectrum colourA, colourB;
+    const Spectrum woodColour, ringColour;
+    const Float ringNoisiness, ringDetail, ringSpacing, fleckIntensity;
 };
 
 WoodTexture *CreateWoodSpectrumTexture(

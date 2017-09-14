@@ -41,14 +41,18 @@ WoodTexture*CreateWoodSpectrumTexture(
     // Initialize 3D texture mapping _map_ from _tp_
     std::unique_ptr<TextureMapping3D> map(new IdentityMapping3D(tex2world));
     
-    Float colour1RGB[3] = { 0.43, 0.27, 0.107 };
-    Float colour2RGB[3] = { 0.6, 0.44, 0.196 };
-    Spectrum colourA = Spectrum::FromRGB(colour1RGB);
-    Spectrum colourB = Spectrum::FromRGB(colour2RGB);
+    Float ringColourRGB[3] = { 0.43, 0.27, 0.107 };
+    Float woodColourRGB[3] = { 0.6, 0.44, 0.196 };
+    Spectrum ringColour = Spectrum::FromRGB(ringColourRGB);
+    Spectrum woodColour = Spectrum::FromRGB(woodColourRGB);
     
     return new WoodTexture(std::move(map),
-                                       tp.FindSpectrum("colourA", colourA),
-                           tp.FindSpectrum("colourB", colourB));
+                           tp.FindSpectrum("woodColour", woodColour),
+                           tp.FindSpectrum("ringColour", ringColour),
+                           tp.FindFloat("ringNoisiness", 0.5),
+                           tp.FindFloat("ringDetail", 0.4),
+                           tp.FindFloat("ringSpacing", 0.8),
+                           tp.FindFloat("fleckIntensity", 0.8));
 }
 
 }  // namespace pbrt
