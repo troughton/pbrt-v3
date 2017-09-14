@@ -75,6 +75,7 @@ class WoodTexture : public Texture<Spectrum> {
         Spectrum texColour = Lerp(rings, ringColour, woodColour);
         texColour = texColour.Clamp();
         
+        // Add a small amount of noise to avoid a uniform colour.
         float noisyRoughness = noise3 * 0.1 + 0.9;
         texColour *= noisyRoughness;
         
