@@ -54,9 +54,8 @@ namespace pbrt {
 class WoodTexture : public Texture<Spectrum> {
   public:
     // WoodTexture Public Methods
-    WoodTexture(std::unique_ptr<TextureMapping3D> mapping, int octaves,
-                    Float omega)
-        : mapping(std::move(mapping)) {}
+    WoodTexture(std::unique_ptr<TextureMapping3D> mapping, const Spectrum& colourA, const Spectrum& colourB)
+        : mapping(std::move(mapping)), colourA(colourA), colourB(colourB) {}
     Spectrum Evaluate(const SurfaceInteraction &si) const {
         Vector3f dpdx, dpdy;
         Point3f mappedPoint = mapping->Map(si, &dpdx, &dpdy);
@@ -65,22 +64,16 @@ class WoodTexture : public Texture<Spectrum> {
         
         auto noise1 = Noise(p.x * 8, p.y * 1.5, p.z * 8);
         auto noise2 = Noise(-p.x * 8 + 4.5678, -p.y * 1.5 + 4.5678, -p.z * 8 + 4.5678);
+        auto noise3 = Noise(p.x * 64.0, p.y * 12.8, p.z * 64);
         
         auto posYX = Vector2f(p.y, p.x);
         
         Float rings = repramp((posYX + Vector2f(noise1, noise2) * 0.05).Length() * 64.0) / 1.8;
         rings -= Noise(p.x, p.y, p.z) * 0.75;
         
-//        float colourA[3] = { 0.3, 0.19, 0.075 }; * 0.95 * 1.5
-//        float colourB[3] = { 1.0, 0.73, 0.326 }; * 0.4 * 1.5
-        Float colour1RGB[3] = { 0.43, 0.27, 0.107 };
-        Float colour2RGB[3] = { 0.6, 0.44, 0.196 };
-        Spectrum colourA = Spectrum::FromRGB(colour1RGB);
-        Spectrum colourB = Spectrum::FromRGB(colour2RGB);
-        
         Spectrum texColour = Lerp(rings, colourA, colourB);
         texColour = texColour.Clamp();
-        float rough = (Noise(p.x * 64.0, p.y * 12.8, p.z * 64) * 0.1 + 0.9);
+        float rough = (noise3 * 0.1 + 0.9);
         texColour *= rough;
         
         // Add detail noise:
@@ -102,6 +95,7 @@ class WoodTexture : public Texture<Spectrum> {
   private:
     // WoodTexture Private Data
     std::unique_ptr<TextureMapping3D> mapping;
+    const Spectrum colourA, colourB;
 };
 
 WoodTexture *CreateWoodSpectrumTexture(
