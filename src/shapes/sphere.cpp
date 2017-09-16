@@ -47,11 +47,11 @@ Bounds3f Sphere::ObjectBound() const {
     // We also need to clamp the range to include 0, since the centre
     // of the sphere will always be at 0, 0, 0.
     
-    Float sinPhiMax = phiMax >= PiOver2 ? 1.0 : std::max(Float(0.0), std::sin(phiMax));
+    Float sinPhiMax = phiMax >= PiOver2 ? 1.0 : std::sin(phiMax);
     Float sinPhiMin = phiMax <= Pi ? 0.0 : (phiMax < 3 * PiOver2 ? std::sin(phiMax) : -1.0);
     
     Float cosPhiMax = 1.0;
-    Float cosPhiMin = phiMax >= Pi ? -1.0 : std::max(Float(0.0), std::cos(phiMax));
+    Float cosPhiMin = phiMax >= Pi ? -1.0 : (phiMax <= PiOver2 ? 0.0 : std::cos(phiMax));
     
     return Bounds3f(Point3f(radius * cosPhiMin, radius * sinPhiMin, zMin),
                     Point3f(radius * cosPhiMax, radius * sinPhiMax, zMax));
