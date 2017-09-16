@@ -59,17 +59,17 @@ class WoodTexture : public Texture<Spectrum> {
     
     Spectrum Evaluate(const SurfaceInteraction &si) const {
         Vector3f dpdx, dpdy;
-        Point3f mappedPoint = mapping->Map(si, &dpdx, &dpdy);
+        Point3f p = mapping->Map(si, &dpdx, &dpdy);
         
-        Point3f p(mappedPoint.x * 0.05, mappedPoint.y * 0.05, mappedPoint.z * 0.05);
+        Point3f scaledPoint(p.x * 20, p.y * 20, p.z * 20);
         
         auto noise1 = Noise(p.x * 8, p.y * 1.5, p.z * 8);
         auto noise2 = Noise(-p.x * 8 + 4.5678, -p.y * 1.5 + 4.5678, -p.z * 8 + 4.5678);
         auto noise3 = Noise(p.x * 64.0, p.y * 12.8, p.z * 64);
         
-        auto posYX = Vector2f(p.y, p.x) * 5 * (1 - ringSpacing);
+        auto posYX = Vector2f(p.y, p.x);
         
-        Float rings = repramp((posYX + Vector2f(noise1, noise2) * 0.1 * ringNoisiness).Length() * 64.0) / 1.8;
+        Float rings = repramp((posYX + Vector2f(noise1, noise2) * 0.1 * ringNoisiness).Length() * 128.0 * ringSpacing) / 1.8;
         rings -= Noise(p.x, p.y, p.z) * 0.75;
         
         Spectrum texColour = Lerp(rings, ringColour, woodColour);
@@ -80,14 +80,14 @@ class WoodTexture : public Texture<Spectrum> {
         texColour *= noisyRoughness;
         
         // Add detail noise to the rings:
-        Float detail = Turbulence(mappedPoint, dpdx, dpdy, 0.9, 12);
-        texColour = texColour + 0.1 * ringDetail * (1 - rings) * Spectrum(detail - 1.0);
+        Float detail = Turbulence(scaledPoint, dpdx, dpdy, 0.9, 12);
+        texColour = texColour + 0.1 * ringDetail * (1 - rings) * Spectrum(detail - 1.75);
         
         // Add dark lines
-        Point3f linesP(mappedPoint.x * 0.08 - 0.2 * rings, mappedPoint.y - noise1, mappedPoint.z + 0.2 * noise2);
+        Point3f linesP(p.x * 0.08 - 0.2 * rings, p.y - noise1, p.z + 0.2 * noise2);
         Spectrum fleckColour = texColour;
-        if (FBm(linesP, dpdx, dpdy, 1.5, 11) > 0.998) {
-            fleckColour = Lerp(1 - (rings * 0.7 + 0.3), ringColour, woodColour) * 0.66;
+        if (FBm(linesP, dpdx, dpdy, 1.5, 11) > 0.995) {
+            fleckColour = Lerp(1 - (rings * 0.7 + 0.3), ringColour, woodColour) * 0.5;
         }
         texColour = Lerp(this->fleckIntensity, texColour, fleckColour);
         

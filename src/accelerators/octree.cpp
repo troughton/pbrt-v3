@@ -357,8 +357,8 @@ namespace pbrt {
         }
 
         
-        size_t depthLimit = ps.FindOneInt("depthLimit", 14);
-        size_t maxPrimsPerNode = ps.FindOneInt("maxPrimsPerNode", 4);
+        size_t depthLimit = ps.FindOneInt("depthlimit", 14);
+        size_t maxPrimsPerNode = ps.FindOneInt("maxprimspernode", 4);
         return std::make_shared<OctreeAccel>(prims, splitMethod, depthLimit, maxPrimsPerNode);
     }
     
