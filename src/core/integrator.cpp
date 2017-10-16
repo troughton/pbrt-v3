@@ -289,7 +289,16 @@ void SamplerIntegrator::Render(const DifferentialRenderingScenePair &scene) {
 
                     // Evaluate radiance along camera ray
                     Spectrum L(0.f);
-                    if (rayWeight > 0) L = Li(ray, scene, *tileSampler, arena);
+                    bool firstHitWasProxy = false;
+                    if (rayWeight > 0) {
+                        L = Li(ray, scene, *tileSampler, arena, firstHitWasProxy);
+                        if (firstHitWasProxy) {
+                            ray.proxyGeometryOnly = true;
+                            ray.tMax += 1e-4; // offset the tMax slightly in case of any > tMax (rather than >= tMax) checks.
+                            L = L - Li(ray, scene, *tileSampler, arena, firstHitWasProxy);
+                        }
+                    }
+                    
 
                     // Issue warning if unexpected radiance value returned
                     if (L.HasNaNs()) {
@@ -371,7 +380,8 @@ Spectrum SamplerIntegrator::SpecularReflect(
             rd.ryDirection =
                 wi - dwody + 2.f * Vector3f(Dot(wo, ns) * dndy + dDNdy * ns);
         }
-        return f * Li(rd, scene, sampler, arena, depth + 1) * AbsDot(wi, ns) /
+        bool hitProxy = false;
+        return f * Li(rd, scene, sampler, arena, hitProxy, depth + 1) * AbsDot(wi, ns) /
                pdf;
     } else
         return Spectrum(0.f);
@@ -421,7 +431,8 @@ Spectrum SamplerIntegrator::SpecularTransmit(
             rd.ryDirection =
                 wi + eta * dwody - Vector3f(mu * dndy + dmudy * ns);
         }
-        L = f * Li(rd, scene, sampler, arena, depth + 1) * AbsDot(wi, ns) / pdf;
+        bool hitProxy = false;
+        L = f * Li(rd, scene, sampler, arena, hitProxy, depth + 1) * AbsDot(wi, ns) / pdf;
     }
     return L;
 }

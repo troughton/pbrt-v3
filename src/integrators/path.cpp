@@ -63,6 +63,7 @@ void PathIntegrator::Preprocess(const Scene &scene, Sampler &sampler) {
 
 Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
                             Sampler &sampler, MemoryArena &arena,
+                            bool& firstHitWasProxy,
                             int depth) const {
     ProfilePhase p(Prof::SamplerIntegratorLi);
     Spectrum L(0.f), beta(1.f);
