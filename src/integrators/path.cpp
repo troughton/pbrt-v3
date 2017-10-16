@@ -106,6 +106,11 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
 
         // Compute scattering functions and skip over medium boundaries
         isect.ComputeScatteringFunctions(ray, arena, true);
+        
+        if (bounces == 0) {
+            firstHitWasProxy = isect.primitive->IsProxy();
+        }
+        
         if (!isect.bsdf) {
             VLOG(2) << "Skipping intersection due to null bsdf";
             ray = isect.SpawnRay(ray.d);

@@ -67,6 +67,8 @@ Spectrum AOIntegrator::Li(const RayDifferential &r, const Scene &scene,
  retry:
     if (scene.Intersect(ray, &isect)) {
         isect.ComputeScatteringFunctions(ray, arena, true);
+        firstHitWasProxy = isect.primitive->IsProxy();
+        
         if (!isect.bsdf) {
             VLOG(2) << "Skipping intersection due to null bsdf";
             ray = isect.SpawnRay(ray.d);
