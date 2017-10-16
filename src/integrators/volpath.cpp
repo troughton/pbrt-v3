@@ -114,6 +114,11 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
 
             // Compute scattering functions and skip over medium boundaries
             isect.ComputeScatteringFunctions(ray, arena, true);
+            
+            if (bounces == 0) {
+                firstHitWasProxy = isect.primitive->IsProxy();
+            }
+            
             if (!isect.bsdf) {
                 ray = isect.SpawnRay(ray.d);
                 bounces--;
