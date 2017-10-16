@@ -67,6 +67,8 @@ void Aggregate::ComputeScatteringFunctions(SurfaceInteraction *isect,
 // TransformedPrimitive Method Definitions
 bool TransformedPrimitive::Intersect(const Ray &r,
                                      SurfaceInteraction *isect) const {
+    if (r.proxyGeometryOnly && !this->IsProxy()) return false;
+    
     // Compute _ray_ after transformation by _PrimitiveToWorld_
     Transform InterpolatedPrimToWorld;
     PrimitiveToWorld.Interpolate(r.time, &InterpolatedPrimToWorld);
@@ -81,6 +83,8 @@ bool TransformedPrimitive::Intersect(const Ray &r,
 }
 
 bool TransformedPrimitive::IntersectP(const Ray &r) const {
+    if (r.proxyGeometryOnly && !this->IsProxy()) return false;
+    
     Transform InterpolatedPrimToWorld;
     PrimitiveToWorld.Interpolate(r.time, &InterpolatedPrimToWorld);
     Transform InterpolatedWorldToPrim = Inverse(InterpolatedPrimToWorld);
@@ -95,11 +99,14 @@ bool TransformedPrimitive::IsProxy() const {
 Bounds3f GeometricPrimitive::WorldBound() const { return shape->WorldBound(); }
 
 bool GeometricPrimitive::IntersectP(const Ray &r) const {
+    if (r.proxyGeometryOnly && !this->IsProxy()) return false;
     return shape->IntersectP(r);
 }
 
 bool GeometricPrimitive::Intersect(const Ray &r,
                                    SurfaceInteraction *isect) const {
+    if (r.proxyGeometryOnly && !this->IsProxy()) return false;
+    
     Float tHit;
     if (!shape->Intersect(r, &tHit, isect)) return false;
     r.tMax = tHit;

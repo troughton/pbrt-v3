@@ -338,11 +338,13 @@ namespace pbrt {
     
     bool OctreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
         ProfilePhase p(Prof::AccelIntersect);
+        if (ray.proxyGeometryOnly && !this->IsProxy()) return false;
         return this->traverseOctree(ray, isect);
     }
     
     bool OctreeAccel::IntersectP(const Ray &ray) const {
         ProfilePhase p(Prof::AccelIntersectP);
+        if (ray.proxyGeometryOnly && !this->IsProxy()) return false;
         return this->traverseOctree(ray, nullptr);
     }
     

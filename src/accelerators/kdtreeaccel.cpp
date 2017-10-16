@@ -271,6 +271,8 @@ retrySplit:
 
 bool KdTreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     ProfilePhase p(Prof::AccelIntersect);
+    if (ray.proxyGeometryOnly && !this->IsProxy()) return false;
+    
     // Compute initial parametric range of ray inside kd-tree extent
     Float tMin, tMax;
     if (!bounds.IntersectP(ray, &tMin, &tMax)) {
@@ -356,6 +358,8 @@ bool KdTreeAccel::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
 
 bool KdTreeAccel::IntersectP(const Ray &ray) const {
     ProfilePhase p(Prof::AccelIntersectP);
+    if (ray.proxyGeometryOnly && !this->IsProxy()) return false;
+    
     // Compute initial parametric range of ray inside kd-tree extent
     Float tMin, tMax;
     if (!bounds.IntersectP(ray, &tMin, &tMax)) {

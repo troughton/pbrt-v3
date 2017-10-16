@@ -890,6 +890,7 @@ class Ray {
     mutable Float tMax;
     Float time;
     const Medium *medium;
+    bool proxyGeometryOnly;
 };
 
 class RayDifferential : public Ray {
