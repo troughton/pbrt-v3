@@ -65,6 +65,7 @@ class BVHAccel : public Aggregate {
     ~BVHAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     bool IntersectP(const Ray &ray) const;
+    bool IsProxy() const;
 
   private:
     // BVHAccel Private Methods
@@ -92,6 +93,7 @@ class BVHAccel : public Aggregate {
     const SplitMethod splitMethod;
     std::vector<std::shared_ptr<Primitive>> primitives;
     LinearBVHNode *nodes = nullptr;
+    bool isProxy;
 };
 
 std::shared_ptr<BVHAccel> CreateBVHAccelerator(

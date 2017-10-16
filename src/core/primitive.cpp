@@ -86,6 +86,10 @@ bool TransformedPrimitive::IntersectP(const Ray &r) const {
     Transform InterpolatedWorldToPrim = Inverse(InterpolatedPrimToWorld);
     return primitive->IntersectP(InterpolatedWorldToPrim(r));
 }
+    
+bool TransformedPrimitive::IsProxy() const {
+    return primitive->IsProxy();
+}
 
 // GeometricPrimitive Method Definitions
 Bounds3f GeometricPrimitive::WorldBound() const { return shape->WorldBound(); }
@@ -109,6 +113,11 @@ bool GeometricPrimitive::Intersect(const Ray &r,
         isect->mediumInterface = MediumInterface(r.medium);
     return true;
 }
+    
+bool GeometricPrimitive::IsProxy() const {
+    return this->isProxy;
+}
+        
 
 const AreaLight *GeometricPrimitive::GetAreaLight() const {
     return areaLight.get();

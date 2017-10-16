@@ -60,6 +60,7 @@ namespace pbrt {
         ~OctreeAccel();
         bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
         bool IntersectP(const Ray &ray) const;
+        bool IsProxy() const;
         
     private:
         // OctreeAccel Private Methods
@@ -86,6 +87,7 @@ namespace pbrt {
         size_t depthLimit;
         size_t maxPrimsPerNode;
         SplitMethod splitMethod;
+        bool isProxy;
     };
     
     std::shared_ptr<OctreeAccel> CreateOctreeAccelerator(

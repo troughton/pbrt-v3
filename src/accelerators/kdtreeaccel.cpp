@@ -95,6 +95,8 @@ KdTreeAccel::KdTreeAccel(const std::vector<std::shared_ptr<Primitive>> &p,
     if (maxDepth <= 0)
         maxDepth = std::round(8 + 1.3f * Log2Int(int64_t(primitives.size())));
 
+    isProxy = true;
+          
     // Compute bounds for kd-tree construction
     std::vector<Bounds3f> primBounds;
     primBounds.reserve(primitives.size());
@@ -102,6 +104,7 @@ KdTreeAccel::KdTreeAccel(const std::vector<std::shared_ptr<Primitive>> &p,
         Bounds3f b = prim->WorldBound();
         bounds = Union(bounds, b);
         primBounds.push_back(b);
+        isProxy = isProxy && prim->IsProxy();
     }
 
     // Allocate working memory for kd-tree construction
@@ -136,6 +139,10 @@ void KdAccelNode::InitLeaf(int *primNums, int np,
 }
 
 KdTreeAccel::~KdTreeAccel() { FreeAligned(nodes); }
+    
+bool KdTreeAccel::IsProxy() const {
+    return isProxy;
+}
 
 void KdTreeAccel::buildTree(int nodeNum, const Bounds3f &nodeBounds,
                             const std::vector<Bounds3f> &allPrimBounds,

@@ -54,6 +54,7 @@ class Primitive {
     virtual Bounds3f WorldBound() const = 0;
     virtual bool Intersect(const Ray &r, SurfaceInteraction *) const = 0;
     virtual bool IntersectP(const Ray &r) const = 0;
+    virtual bool IsProxy() const = 0;
     virtual const AreaLight *GetAreaLight() const = 0;
     virtual const Material *GetMaterial() const = 0;
     virtual void ComputeScatteringFunctions(SurfaceInteraction *isect,
@@ -79,6 +80,7 @@ class GeometricPrimitive : public Primitive {
           mediumInterface(mediumInterface) {}
     const AreaLight *GetAreaLight() const;
     const Material *GetMaterial() const;
+    bool IsProxy() const;
     void ComputeScatteringFunctions(SurfaceInteraction *isect,
                                     MemoryArena &arena, TransportMode mode,
                                     bool allowMultipleLobes) const;
@@ -89,6 +91,7 @@ class GeometricPrimitive : public Primitive {
     std::shared_ptr<Material> material;
     std::shared_ptr<AreaLight> areaLight;
     MediumInterface mediumInterface;
+    bool isProxy;
 };
 
 // TransformedPrimitive Declarations
@@ -100,6 +103,7 @@ class TransformedPrimitive : public Primitive {
         : primitive(primitive), PrimitiveToWorld(PrimitiveToWorld) {}
     bool Intersect(const Ray &r, SurfaceInteraction *in) const;
     bool IntersectP(const Ray &r) const;
+    bool IsProxy() const;
     const AreaLight *GetAreaLight() const { return nullptr; }
     const Material *GetMaterial() const { return nullptr; }
     void ComputeScatteringFunctions(SurfaceInteraction *isect,

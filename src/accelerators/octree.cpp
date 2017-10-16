@@ -45,11 +45,14 @@ namespace pbrt {
     OctreeAccel::OctreeAccel(const std::vector<std::shared_ptr<Primitive>> &primitives, SplitMethod splitMethod, size_t depthLimit, size_t maxPrimsPerNode) : depthLimit(depthLimit), maxPrimsPerNode(maxPrimsPerNode), splitMethod(splitMethod) {
         ProfilePhase _(Prof::AccelConstruction);
         
+        isProxy = true;
+        
         // Initialize _primitiveInfo_ array for primitives
         std::vector<OctreePrimitiveInfo> primitiveInfo(primitives.size());
         for (size_t i = 0; i < primitives.size(); ++i) {
             primitiveInfo[i] = OctreePrimitiveInfo(i, primitives[i]->WorldBound());
             this->worldBound = Union(this->worldBound, primitiveInfo[i].bounds);
+            isProxy = isProxy && primitives[i]->IsProxy();
         }
         
         this->primitives.reserve(primitives.size());
@@ -67,6 +70,10 @@ namespace pbrt {
     
     Bounds3f OctreeAccel::WorldBound() const {
         return this->worldBound;
+    }
+    
+    bool OctreeAccel::IsProxy() const {
+        return isProxy;
     }
     
     size_t OctreeAccel::addPrimitives(const std::vector<std::shared_ptr<Primitive>>& prims, OctreePrimitiveInfo* primInfos, const size_t primCount) {
