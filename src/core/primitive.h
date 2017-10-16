@@ -77,7 +77,8 @@ class GeometricPrimitive : public Primitive {
         : shape(shape),
           material(material),
           areaLight(areaLight),
-          mediumInterface(mediumInterface) {}
+          mediumInterface(mediumInterface),
+          isProxy(false) {}
     const AreaLight *GetAreaLight() const;
     const Material *GetMaterial() const;
     bool IsProxy() const;
