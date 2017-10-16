@@ -61,10 +61,13 @@ Spectrum WhittedIntegrator::Li(const RayDifferential &ray, const Scene &scene,
 
     // Compute scattering functions for surface interaction
     isect.ComputeScatteringFunctions(ray, arena);
+    firstHitWasProxy = isect.primitive->IsProxy();
+    
     if (!isect.bsdf) {
         bool hitProxy = false;
         return Li(isect.SpawnRay(ray.d), scene, sampler, arena, hitProxy, depth);
     }
+    
 
     // Compute emitted light if ray hit an area light source
     L += isect.Le(wo);
