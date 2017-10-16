@@ -56,6 +56,7 @@ AOIntegrator::AOIntegrator(bool cosSample, int ns,
 
 Spectrum AOIntegrator::Li(const RayDifferential &r, const Scene &scene,
                           Sampler &sampler, MemoryArena &arena,
+                          bool& firstHitWasProxy,
                           int depth) const {
     ProfilePhase p(Prof::SamplerIntegratorLi);
     Spectrum L(0.f);
