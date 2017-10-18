@@ -1392,7 +1392,7 @@ void pbrtWorldEnd() {
         CHECK_EQ(CurrentProfilerState(), ProfToBits(Prof::SceneConstruction));
         ProfilerState = ProfToBits(Prof::IntegratorRender);
 
-        if (scenePair->scene && integrator) integrator->Render(*scenePair->scene);
+        if (scenePair && integrator) integrator->Render(*scenePair);
 
         CHECK_EQ(CurrentProfilerState(), ProfToBits(Prof::IntegratorRender));
         ProfilerState = ProfToBits(Prof::SceneConstruction);

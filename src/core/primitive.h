@@ -73,11 +73,13 @@ class GeometricPrimitive : public Primitive {
     GeometricPrimitive(const std::shared_ptr<Shape> &shape,
                        const std::shared_ptr<Material> &material,
                        const std::shared_ptr<AreaLight> &areaLight,
-                       const MediumInterface &mediumInterface)
+                       const MediumInterface &mediumInterface,
+                       const bool isProxy)
         : shape(shape),
           material(material),
           areaLight(areaLight),
-          mediumInterface(mediumInterface) {}
+          mediumInterface(mediumInterface),
+          isProxy(isProxy) {}
     const AreaLight *GetAreaLight() const;
     const Material *GetMaterial() const;
     bool IsProxy() const;
