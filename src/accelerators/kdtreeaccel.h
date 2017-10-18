@@ -57,7 +57,8 @@ class KdTreeAccel : public Aggregate {
     ~KdTreeAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     bool IntersectP(const Ray &ray) const;
-
+    bool IsProxy() const;
+    
   private:
     // KdTreeAccel Private Methods
     void buildTree(int nodeNum, const Bounds3f &bounds,
@@ -74,6 +75,7 @@ class KdTreeAccel : public Aggregate {
     KdAccelNode *nodes;
     int nAllocedNodes, nextFreeNode;
     Bounds3f bounds;
+    bool isProxy;
 };
 
 struct KdToDo {
