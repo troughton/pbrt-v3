@@ -291,11 +291,10 @@ void SamplerIntegrator::Render(const DifferentialRenderingScenePair &scene) {
                     Spectrum L(0.f);
                     bool firstHitWasProxy = false;
                     if (rayWeight > 0) {
-                        L = Li(ray, scene, *tileSampler, arena, firstHitWasProxy);
+                        L = Li(ray, *scene.scene, *tileSampler, arena, firstHitWasProxy);
                         if (firstHitWasProxy) {
-                            ray.proxyGeometryOnly = true;
                             ray.tMax += 1e-4; // offset the tMax slightly in case of any > tMax (rather than >= tMax) checks.
-                            L = L - Li(ray, scene, *tileSampler, arena, firstHitWasProxy);
+                            L = L - Li(ray, *scene.proxyScene, *tileSampler, arena, firstHitWasProxy);
                         }
                     }
                     
