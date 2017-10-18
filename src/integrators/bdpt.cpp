@@ -299,7 +299,9 @@ inline int BufferIndex(int s, int t) {
     return s + above * (5 + above) / 2;
 }
 
-void BDPTIntegrator::Render(const Scene &scene) {
+void BDPTIntegrator::Render(const DifferentialRenderingScenePair &scenePair) {
+    const Scene &scene = *scenePair.scene;
+    
     std::unique_ptr<LightDistribution> lightDistribution =
         CreateLightSampleDistribution(lightSampleStrategy, scene);
 
