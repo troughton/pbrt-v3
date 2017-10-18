@@ -82,6 +82,7 @@ void pbrtNamedMaterial(const std::string &name);
 void pbrtLightSource(const std::string &name, const ParamSet &params);
 void pbrtAreaLightSource(const std::string &name, const ParamSet &params);
 void pbrtShape(const std::string &name, const ParamSet &params);
+void pbrtProxyGeometry();
 void pbrtReverseOrientation();
 void pbrtObjectBegin(const std::string &name);
 void pbrtObjectEnd();
