@@ -61,7 +61,7 @@ class SPPMIntegrator : public Integrator {
                                   ? photonsPerIteration
                                   : camera->film->croppedPixelBounds.Area()),
           writeFrequency(writeFrequency) {}
-    void Render(const Scene &scene);
+    void Render(const DifferentialRenderingScenePair &scene);
 
   private:
     // SPPMIntegrator Private Data

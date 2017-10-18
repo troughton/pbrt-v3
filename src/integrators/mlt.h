@@ -117,7 +117,7 @@ class MLTIntegrator : public Integrator {
           mutationsPerPixel(mutationsPerPixel),
           sigma(sigma),
           largeStepProbability(largeStepProbability) {}
-    void Render(const Scene &scene);
+    void Render(const DifferentialRenderingScenePair &scene);
     Spectrum L(const Scene &scene, MemoryArena &arena,
                const std::unique_ptr<Distribution1D> &lightDistr,
                const std::unordered_map<const Light *, size_t> &lightToIndex,

@@ -139,7 +139,7 @@ class BDPTIntegrator : public Integrator {
           visualizeWeights(visualizeWeights),
           pixelBounds(pixelBounds),
           lightSampleStrategy(lightSampleStrategy) {}
-    void Render(const Scene &scene);
+    void Render(const DifferentialRenderingScenePair &scene);
 
   private:
     // BDPTIntegrator Private Data
