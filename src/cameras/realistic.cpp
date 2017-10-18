@@ -433,7 +433,7 @@ void RealisticCamera::ComputeThickLensApproximation(Float pz[2],
     Float x = .001 * film->diagonal;
 
     // Compute cardinal points for film side of lens system
-    Ray rScene(Point3f(x, 0, LensFrontZ() + 1), Vector3f(0, 0, -1));
+    Ray rScene(Point3f(x, 0, LensFrontZ() + 1), Vector3f(0, 0, -1), false);
     Ray rFilm;
     CHECK(TraceLensesFromScene(rScene, &rFilm))
         << "Unable to trace ray from scene to film for thick lens "
@@ -441,7 +441,7 @@ void RealisticCamera::ComputeThickLensApproximation(Float pz[2],
     ComputeCardinalPoints(rScene, rFilm, &pz[0], &fz[0]);
 
     // Compute cardinal points for scene side of lens system
-    rFilm = Ray(Point3f(x, 0, LensRearZ() - 1), Vector3f(0, 0, 1));
+    rFilm = Ray(Point3f(x, 0, LensRearZ() - 1), Vector3f(0, 0, 1), false);
     CHECK(TraceLensesFromFilm(rFilm, &rScene))
         << "Unable to trace ray from film to scene for thick lens "
            "approximation. Is aperture stop extremely small?";
@@ -489,7 +489,7 @@ Float RealisticCamera::FocusDistance(Float filmDistance) {
     // Find offset ray from film center through lens
     Bounds2f bounds = BoundExitPupil(0, .001 * film->diagonal);
 
-    const std::array<Float, 3> scaleFactors = {0.1f, 0.01f, 0.001f};
+    const std::array<Float, 3> scaleFactors = {{0.1f, 0.01f, 0.001f}};
     Float lu = 0.0f;
 
     Ray ray;
@@ -501,7 +501,7 @@ Float RealisticCamera::FocusDistance(Float filmDistance) {
     for (Float scale : scaleFactors) {
         lu = scale * bounds.pMax[0];
         if (TraceLensesFromFilm(Ray(Point3f(0, 0, LensRearZ() - filmDistance),
-                                    Vector3f(lu, 0, filmDistance)),
+                                    Vector3f(lu, 0, filmDistance), false),
                                 &ray)) {
             foundFocusRay = true;
             break;
@@ -544,7 +544,7 @@ Bounds2f RealisticCamera::BoundExitPupil(Float pFilmX0, Float pFilmX1) const {
 
         // Expand pupil bounds if ray makes it through the lens system
         if (Inside(Point2f(pRear.x, pRear.y), pupilBounds) ||
-            TraceLensesFromFilm(Ray(pFilm, pRear - pFilm), nullptr)) {
+            TraceLensesFromFilm(Ray(pFilm, pRear - pFilm, false), nullptr)) {
             pupilBounds = Union(pupilBounds, Point2f(pRear.x, pRear.y));
             ++nExitingRays;
         }
@@ -584,7 +584,7 @@ void RealisticCamera::RenderExitPupil(Float sx, Float sy,
                 *imagep++ = 1;
                 *imagep++ = 1;
                 *imagep++ = 1;
-            } else if (TraceLensesFromFilm(Ray(pFilm, pRear - pFilm),
+            } else if (TraceLensesFromFilm(Ray(pFilm, pRear - pFilm, false),
                                            nullptr)) {
                 *imagep++ = 0.5f;
                 *imagep++ = 0.5f;
@@ -646,7 +646,7 @@ void RealisticCamera::TestExitPupilBounds() const {
         Point2f pd = ConcentricSampleDisk(u2);
         pd *= RearElementRadius();
 
-        Ray testRay(pFilm, Point3f(pd.x, pd.y, 0.f) - pFilm);
+        Ray testRay(pFilm, Point3f(pd.x, pd.y, 0.f) - pFilm, false);
         Ray testOut;
         if (!TraceLensesFromFilm(testRay, &testOut)) continue;
 

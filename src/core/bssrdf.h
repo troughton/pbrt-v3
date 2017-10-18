@@ -58,6 +58,7 @@ class BSSRDF {
     // BSSRDF Interface
     virtual Spectrum S(const SurfaceInteraction &pi, const Vector3f &wi) = 0;
     virtual Spectrum Sample_S(const Scene &scene, Float u1, const Point2f &u2,
+                              bool proxyGeometryOnly,
                               MemoryArena &arena, SurfaceInteraction *si,
                               Float *pdf) const = 0;
 
@@ -93,9 +94,11 @@ class SeparableBSSRDF : public BSSRDF {
         return Sr(Distance(po.p, pi.p));
     }
     Spectrum Sample_S(const Scene &scene, Float u1, const Point2f &u2,
+                      bool proxyGeometryOnly,
                       MemoryArena &arena, SurfaceInteraction *si,
                       Float *pdf) const;
     Spectrum Sample_Sp(const Scene &scene, Float u1, const Point2f &u2,
+                       bool proxyGeometryOnly,
                        MemoryArena &arena, SurfaceInteraction *si,
                        Float *pdf) const;
     Float Pdf_Sp(const SurfaceInteraction &si) const;

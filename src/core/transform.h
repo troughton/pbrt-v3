@@ -260,12 +260,12 @@ inline Ray Transform::operator()(const Ray &r) const {
         o += d * dt;
         tMax -= dt;
     }
-    return Ray(o, d, tMax, r.time, r.medium);
+    return Ray(o, d, r.proxyGeometryOnly, tMax, r.time, r.medium);
 }
 
 inline RayDifferential Transform::operator()(const RayDifferential &r) const {
     Ray tr = (*this)(Ray(r));
-    RayDifferential ret(tr.o, tr.d, tr.tMax, tr.time, tr.medium);
+    RayDifferential ret(tr.o, tr.d, tr.proxyGeometryOnly, tr.tMax, tr.time, tr.medium);
     ret.hasDifferentials = r.hasDifferentials;
     ret.rxOrigin = (*this)(r.rxOrigin);
     ret.ryOrigin = (*this)(r.ryOrigin);
@@ -390,7 +390,7 @@ inline Ray Transform::operator()(const Ray &r, Vector3f *oError,
         o += d * dt;
         //        tMax -= dt;
     }
-    return Ray(o, d, tMax, r.time, r.medium);
+    return Ray(o, d, r.proxyGeometryOnly, tMax, r.time, r.medium);
 }
 
 inline Ray Transform::operator()(const Ray &r, const Vector3f &oErrorIn,
@@ -405,7 +405,7 @@ inline Ray Transform::operator()(const Ray &r, const Vector3f &oErrorIn,
         o += d * dt;
         //        tMax -= dt;
     }
-    return Ray(o, d, tMax, r.time, r.medium);
+    return Ray(o, d, r.proxyGeometryOnly, tMax, r.time, r.medium);
 }
 
 // AnimatedTransform Declarations

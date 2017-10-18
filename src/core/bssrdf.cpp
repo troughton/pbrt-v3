@@ -231,10 +231,11 @@ Spectrum TabulatedBSSRDF::Sr(Float r) const {
 }
 
 Spectrum SeparableBSSRDF::Sample_S(const Scene &scene, Float u1,
-                                   const Point2f &u2, MemoryArena &arena,
+                                   const Point2f &u2, bool proxyGeometryOnly,
+                                   MemoryArena &arena,
                                    SurfaceInteraction *si, Float *pdf) const {
     ProfilePhase pp(Prof::BSSRDFSampling);
-    Spectrum Sp = Sample_Sp(scene, u1, u2, arena, si, pdf);
+    Spectrum Sp = Sample_Sp(scene, u1, u2, proxyGeometryOnly, arena, si, pdf);
     if (!Sp.IsBlack()) {
         // Initialize material model at sampled surface interaction
         si->bsdf = ARENA_ALLOC(arena, BSDF)(*si);
@@ -245,7 +246,8 @@ Spectrum SeparableBSSRDF::Sample_S(const Scene &scene, Float u1,
 }
 
 Spectrum SeparableBSSRDF::Sample_Sp(const Scene &scene, Float u1,
-                                    const Point2f &u2, MemoryArena &arena,
+                                    const Point2f &u2, bool proxyGeometryOnly,
+                                    MemoryArena &arena,
                                     SurfaceInteraction *pi, Float *pdf) const {
     ProfilePhase pp(Prof::BSSRDFEvaluation);
     // Choose projection axis for BSSRDF sampling
@@ -302,7 +304,7 @@ Spectrum SeparableBSSRDF::Sample_Sp(const Scene &scene, Float u1,
     // Accumulate chain of intersections along ray
     IntersectionChain *ptr = chain;
     int nFound = 0;
-    while (scene.Intersect(base.SpawnRayTo(pTarget), &ptr->si)) {
+    while (scene.Intersect(base.SpawnRayTo(pTarget, proxyGeometryOnly), &ptr->si)) {
         base = ptr->si;
         // Append admissible intersection to _IntersectionChain_
         if (ptr->si.primitive->GetMaterial() == this->material) {

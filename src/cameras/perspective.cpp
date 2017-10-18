@@ -72,7 +72,7 @@ Float PerspectiveCamera::GenerateRay(const CameraSample &sample,
     // Compute raster and camera sample positions
     Point3f pFilm = Point3f(sample.pFilm.x, sample.pFilm.y, 0);
     Point3f pCamera = RasterToCamera(pFilm);
-    *ray = Ray(Point3f(0, 0, 0), Normalize(Vector3f(pCamera)));
+    *ray = Ray(Point3f(0, 0, 0), Normalize(Vector3f(pCamera)), false); // GenerateRay never returns rays with proxyGeometryOnly set to true.
     // Modify ray for depth of field
     if (lensRadius > 0) {
         // Sample point on lens
@@ -99,7 +99,7 @@ Float PerspectiveCamera::GenerateRayDifferential(const CameraSample &sample,
     Point3f pFilm = Point3f(sample.pFilm.x, sample.pFilm.y, 0);
     Point3f pCamera = RasterToCamera(pFilm);
     Vector3f dir = Normalize(Vector3f(pCamera.x, pCamera.y, pCamera.z));
-    *ray = RayDifferential(Point3f(0, 0, 0), dir);
+    *ray = RayDifferential(Point3f(0, 0, 0), dir, false); // GenerateRay never returns rays with proxyGeometryOnly set to true.
     // Modify ray for depth of field
     if (lensRadius > 0) {
         // Sample point on lens
@@ -221,7 +221,7 @@ Spectrum PerspectiveCamera::Sample_Wi(const Interaction &ref, const Point2f &u,
     // Compute lens area of perspective camera
     Float lensArea = lensRadius != 0 ? (Pi * lensRadius * lensRadius) : 1;
     *pdf = (dist * dist) / (AbsDot(lensIntr.n, *wi) * lensArea);
-    return We(lensIntr.SpawnRay(-*wi), pRaster);
+    return We(lensIntr.SpawnRay(-*wi, false), pRaster); // FIXME: what should we do with BDPT and differential rendering?
 }
 
 PerspectiveCamera *CreatePerspectiveCamera(const ParamSet &params,

@@ -61,20 +61,20 @@ struct Interaction {
           n(n),
           mediumInterface(mediumInterface) {}
     bool IsSurfaceInteraction() const { return n != Normal3f(); }
-    Ray SpawnRay(const Vector3f &d) const {
+    Ray SpawnRay(const Vector3f &d, bool proxyGeometryOnly) const {
         Point3f o = OffsetRayOrigin(p, pError, n, d);
-        return Ray(o, d, Infinity, time, GetMedium(d));
+        return Ray(o, d, proxyGeometryOnly, Infinity, time, GetMedium(d));
     }
-    Ray SpawnRayTo(const Point3f &p2) const {
+    Ray SpawnRayTo(const Point3f &p2, bool proxyGeometryOnly) const {
         Point3f origin = OffsetRayOrigin(p, pError, n, p2 - p);
         Vector3f d = p2 - p;
-        return Ray(origin, d, 1 - ShadowEpsilon, time, GetMedium(d));
+        return Ray(origin, d, proxyGeometryOnly, 1 - ShadowEpsilon, time, GetMedium(d));
     }
-    Ray SpawnRayTo(const Interaction &it) const {
+    Ray SpawnRayTo(const Interaction &it, bool proxyGeometryOnly) const {
         Point3f origin = OffsetRayOrigin(p, pError, n, it.p - p);
         Point3f target = OffsetRayOrigin(it.p, it.pError, it.n, origin - it.p);
         Vector3f d = target - origin;
-        return Ray(origin, d, 1 - ShadowEpsilon, time, GetMedium(d));
+        return Ray(origin, d, proxyGeometryOnly, 1 - ShadowEpsilon, time, GetMedium(d));
     }
     Interaction(const Point3f &p, const Vector3f &wo, Float time,
                 const MediumInterface &mediumInterface)
