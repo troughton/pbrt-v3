@@ -108,7 +108,9 @@ inline unsigned int hash(const Point3i &p, int hashSize) {
 }
 
 // SPPM Method Definitions
-void SPPMIntegrator::Render(const Scene &scene) {
+void SPPMIntegrator::Render(const DifferentialRenderingScenePair &scenePair) {
+    const Scene &scene = *scenePair.scene;
+    
     ProfilePhase p(Prof::IntegratorRender);
     // Initialize _pixelBounds_ and _pixels_ array for SPPM
     Bounds2i pixelBounds = camera->film->croppedPixelBounds;

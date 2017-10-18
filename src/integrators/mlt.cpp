@@ -162,7 +162,9 @@ Spectrum MLTIntegrator::L(const Scene &scene, MemoryArena &arena,
            nStrategies;
 }
 
-void MLTIntegrator::Render(const Scene &scene) {
+void MLTIntegrator::Render(const DifferentialRenderingScenePair &scenePair) {
+    const Scene &scene = *scenePair.scene;
+    
     std::unique_ptr<Distribution1D> lightDistr =
         ComputeLightPowerDistribution(scene);
 

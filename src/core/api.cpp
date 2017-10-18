@@ -200,6 +200,7 @@ struct GraphicsState {
     ParamSet areaLightParams;
     std::string areaLight;
     bool reverseOrientation = false;
+    bool proxyGeometry = false;
 };
 
 class TransformCache {
@@ -1191,7 +1192,7 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
                 if (area) areaLights.push_back(area);
             }
             prims.push_back(
-                std::make_shared<GeometricPrimitive>(s, mtl, area, mi));
+                std::make_shared<GeometricPrimitive>(s, mtl, area, mi, graphicsState.proxyGeometry));
         }
     } else {
         // Initialize _prims_ and _areaLights_ for animated shape
@@ -1213,7 +1214,7 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
         MediumInterface mi = graphicsState.CreateMediumInterface();
         for (auto s : shapes)
             prims.push_back(
-                std::make_shared<GeometricPrimitive>(s, mtl, nullptr, mi));
+                std::make_shared<GeometricPrimitive>(s, mtl, nullptr, mi, graphicsState.proxyGeometry));
 
         // Create single _TransformedPrimitive_ for _prims_
 
