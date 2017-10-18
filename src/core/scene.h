@@ -77,6 +77,22 @@ class Scene {
     std::shared_ptr<Primitive> aggregate;
     Bounds3f worldBound;
 };
+    
+class DifferentialRenderingScenePair {
+    public:
+    
+    DifferentialRenderingScenePair(const Scene *scene, const Scene *proxyScene = nullptr) : scene(scene), proxyScene(proxyScene) { }
+    
+    ~DifferentialRenderingScenePair() {
+        delete scene;
+        if (proxyScene) {
+            delete proxyScene;
+        }
+    }
+    
+    const Scene *scene;
+    const Scene *proxyScene;
+};
 
 }  // namespace pbrt
 
