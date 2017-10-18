@@ -307,7 +307,7 @@ void SamplerIntegrator::Render(const DifferentialRenderingScenePair &scene) {
                             pixel.x, pixel.y,
                             (int)tileSampler->CurrentSampleNumber());
                         L = Spectrum(0.f);
-                    } else if (L.y() < -1e-5) {
+                    } else if (!scene.proxyScene && L.y() < -1e-5) {
                         LOG(ERROR) << StringPrintf(
                             "Negative luminance value, %f, returned "
                             "for pixel (%d, %d), sample %d. Setting to black.",

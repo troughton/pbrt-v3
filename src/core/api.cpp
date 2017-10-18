@@ -1290,6 +1290,13 @@ MediumInterface GraphicsState::CreateMediumInterface() {
     }
     return m;
 }
+    
+void pbrtProxyGeometry() {
+    VERIFY_WORLD("ProxyGeometry");
+    graphicsState.proxyGeometry = true;
+    if (PbrtOptions.cat || PbrtOptions.toPly)
+    printf("%*sProxyGeometry\n", catIndentCount, "");
+}
 
 void pbrtReverseOrientation() {
     VERIFY_WORLD("ReverseOrientation");

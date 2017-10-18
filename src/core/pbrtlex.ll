@@ -152,6 +152,7 @@ ObjectBegin             { return OBJECTBEGIN; }
 ObjectEnd               { return OBJECTEND; }
 ObjectInstance          { return OBJECTINSTANCE; }
 PixelFilter             { return PIXELFILTER; }
+ProxyGeometry           { return PROXYGEOMETRY; }
 ReverseOrientation      { return REVERSEORIENTATION; }
 Rotate                  { return ROTATE; }
 Sampler                 { return SAMPLER; }
