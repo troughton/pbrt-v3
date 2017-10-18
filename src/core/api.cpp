@@ -157,7 +157,7 @@ struct TransformSet {
 struct RenderOptions {
     // RenderOptions Public Methods
     Integrator *MakeIntegrator() const;
-    Scene *MakeScene();
+    DifferentialRenderingScenePair *MakeScene();
     Camera *MakeCamera() const;
 
     // RenderOptions Public Data
@@ -181,6 +181,7 @@ struct RenderOptions {
     std::map<std::string, std::vector<std::shared_ptr<Primitive>>> instances;
     std::vector<std::shared_ptr<Primitive>> *currentInstance = nullptr;
     bool haveScatteringMedia = false;
+    bool haveProxyGeometry = false;
 };
 
 struct GraphicsState {
@@ -1380,7 +1381,7 @@ void pbrtWorldEnd() {
         printf("%*sWorldEnd\n", catIndentCount, "");
     } else {
         std::unique_ptr<Integrator> integrator(renderOptions->MakeIntegrator());
-        std::unique_ptr<Scene> scene(renderOptions->MakeScene());
+        std::unique_ptr<DifferentialRenderingScenePair> scenePair(renderOptions->MakeScene());
 
         // This is kind of ugly; we directly override the current profiler
         // state to switch from parsing/scene construction related stuff to
@@ -1391,7 +1392,7 @@ void pbrtWorldEnd() {
         CHECK_EQ(CurrentProfilerState(), ProfToBits(Prof::SceneConstruction));
         ProfilerState = ProfToBits(Prof::IntegratorRender);
 
-        if (scene && integrator) integrator->Render(*scene);
+        if (scenePair->scene && integrator) integrator->Render(*scenePair->scene);
 
         CHECK_EQ(CurrentProfilerState(), ProfToBits(Prof::IntegratorRender));
         ProfilerState = ProfToBits(Prof::SceneConstruction);
@@ -1422,15 +1423,32 @@ void pbrtWorldEnd() {
                                  namedCoordinateSystems.end());
 }
 
-Scene *RenderOptions::MakeScene() {
+DifferentialRenderingScenePair *RenderOptions::MakeScene() {
     std::shared_ptr<Primitive> accelerator =
         MakeAccelerator(AcceleratorName, primitives, AcceleratorParams);
     if (!accelerator) accelerator = std::make_shared<BVHAccel>(primitives);
     Scene *scene = new Scene(accelerator, lights);
+    
+    Scene *proxyScene = nullptr;
+    if (this->haveProxyGeometry) {
+        std::vector<std::shared_ptr<Primitive>> proxyPrimitives;
+        for (const std::shared_ptr<Primitive>& prim : primitives) {
+            if (prim->IsProxy()) {
+                proxyPrimitives.push_back(prim);
+            }
+        }
+        
+        std::shared_ptr<Primitive> proxyAccelerator =
+        MakeAccelerator(AcceleratorName, proxyPrimitives, AcceleratorParams);
+        if (!proxyAccelerator) proxyAccelerator = std::make_shared<BVHAccel>(proxyPrimitives);
+        proxyScene = new Scene(proxyAccelerator, lights);
+    }
+    
     // Erase primitives and lights from _RenderOptions_
     primitives.erase(primitives.begin(), primitives.end());
     lights.erase(lights.begin(), lights.end());
-    return scene;
+    
+    return new DifferentialRenderingScenePair(scene, proxyScene);
 }
 
 Integrator *RenderOptions::MakeIntegrator() const {
