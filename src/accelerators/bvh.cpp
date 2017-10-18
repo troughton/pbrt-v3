@@ -189,10 +189,14 @@ BVHAccel::BVHAccel(const std::vector<std::shared_ptr<Primitive>> &p,
     if (primitives.empty()) return;
     // Build BVH from _primitives_
 
+    isProxy = true;
+          
     // Initialize _primitiveInfo_ array for primitives
     std::vector<BVHPrimitiveInfo> primitiveInfo(primitives.size());
-    for (size_t i = 0; i < primitives.size(); ++i)
+    for (size_t i = 0; i < primitives.size(); ++i) {
         primitiveInfo[i] = {i, primitives[i]->WorldBound()};
+        isProxy = isProxy && primitives[i]->IsProxy();
+    }
 
     // Build BVH tree for primitives using _primitiveInfo_
     MemoryArena arena(1024 * 1024);
@@ -223,6 +227,10 @@ BVHAccel::BVHAccel(const std::vector<std::shared_ptr<Primitive>> &p,
 
 Bounds3f BVHAccel::WorldBound() const {
     return nodes ? nodes[0].bounds : Bounds3f();
+}
+    
+bool BVHAccel::IsProxy() const {
+    return isProxy;
 }
 
 struct BucketInfo {
