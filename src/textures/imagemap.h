@@ -93,7 +93,6 @@ class ImageTexture : public Texture<Treturn> {
         return ret;
     }
 
-  private:
     // ImageTexture Private Methods
     static MIPMap<Tmemory> *GetTexture(const std::string &filename,
                                        bool doTrilinear, Float maxAniso,
@@ -114,6 +113,7 @@ class ImageTexture : public Texture<Treturn> {
     }
     static void convertOut(Float from, Float *to) { *to = from; }
 
+private:
     // ImageTexture Private Data
     std::unique_ptr<TextureMapping2D> mapping;
     MIPMap<Tmemory> *mipmap;
