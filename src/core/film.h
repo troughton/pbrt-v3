@@ -61,6 +61,7 @@ class Film {
     Film(const Point2i &resolution, const Bounds2f &cropWindow,
          std::unique_ptr<Filter> filter, Float diagonal,
          const std::string &filename, Float scale,
+         const std::string &backgroundImage, Float backgroundScale,
          Float maxSampleLuminance = Infinity);
     Bounds2i GetSampleBounds() const;
     Bounds2f GetPhysicalExtent() const;
@@ -76,6 +77,7 @@ class Film {
     const Float diagonal;
     std::unique_ptr<Filter> filter;
     const std::string filename;
+    const std::string backgroundFilename;
     Bounds2i croppedPixelBounds;
 
   private:
@@ -92,7 +94,9 @@ class Film {
     Float filterTable[filterTableWidth * filterTableWidth];
     std::mutex mutex;
     const Float scale;
+    const Float backgroundScale;
     const Float maxSampleLuminance;
+    const bool hasBackgroundImage;
 
     // Film Private Methods
     Pixel &GetPixel(const Point2i &p) {

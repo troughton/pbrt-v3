@@ -48,6 +48,7 @@ Camera::Camera(const AnimatedTransform &CameraToWorld, Float shutterOpen,
       shutterClose(shutterClose),
       film(film),
       medium(medium) {
+          
     if (CameraToWorld.HasScale())
         Warning(
             "Scaling detected in world-to-camera transformation!\n"
