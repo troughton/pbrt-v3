@@ -61,7 +61,7 @@ class DirectLightingIntegrator : public SamplerIntegrator {
           maxDepth(maxDepth) {}
     Spectrum Li(const RayDifferential &ray, const Scene &scene,
                 Sampler &sampler, MemoryArena &arena,
-                bool& firstHitWasProxy,
+                FirstIntersectionType& firstIntersectionType,
                 int depth) const;
     void Preprocess(const Scene &scene, Sampler &sampler);
 

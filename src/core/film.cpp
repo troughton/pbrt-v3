@@ -52,11 +52,11 @@ namespace pbrt {
     diagonal(diagonal * .001),
     filter(std::move(filt)),
     filename(filename),
-    scale(scale),
-    maxSampleLuminance(maxSampleLuminance),
     backgroundFilename(backgroundImageName),
+    hasBackgroundImage(!backgroundImageName.empty()),
+    scale(scale),
     backgroundScale(backgroundScale),
-    hasBackgroundImage(!backgroundImageName.empty()) {
+    maxSampleLuminance(maxSampleLuminance) {
         // Compute film image bounds
         croppedPixelBounds =
         Bounds2i(Point2i(std::ceil(fullResolution.x * cropWindow.pMin.x),
@@ -191,13 +191,28 @@ namespace pbrt {
             
             // Normalize pixel with weight sum
             Float filterWeightSum = pixel.filterWeightSum;
+            
+            bool backgroundBlend = hasBackgroundImage && filterWeightSum < 1.f;
+            
             if (filterWeightSum != 0) {
-                Float invWt = (Float)1 / filterWeightSum;
+                Float invWt = backgroundBlend ? 1.f : (Float)1 / filterWeightSum;
+                
                 rgb[3 * offset] = std::max((Float)0, rgb[3 * offset] * invWt);
                 rgb[3 * offset + 1] =
                 std::max((Float)0, rgb[3 * offset + 1] * invWt);
-                rgb[3 * offset + 2] =
-                std::max((Float)0, rgb[3 * offset + 2] * invWt);
+                rgb[3 * offset + 2] = rgb[3 * offset + 2] * invWt;
+            }
+            
+            if (hasBackgroundImage && filterWeightSum < 1.f) {
+                const Point2f st = Point2f((Float)p.x / (Float)(fullResolution.x - 1), (Float)p.y / (Float)(fullResolution.y - 1));
+                RGBSpectrum backgroundColour = backgroundImage->Lookup(st);
+                Float backgroundRGB[3];
+                backgroundColour.ToRGB(backgroundRGB);
+                Float weight = 1.f - filterWeightSum;
+                
+                for (int i = 0; i < 3; i += 1) {
+                    rgb[3 * offset + i] += backgroundRGB[i] * backgroundScale * weight;
+                }
             }
             
             // Add splat value at pixel
@@ -208,6 +223,10 @@ namespace pbrt {
             rgb[3 * offset] += splatScale * splatRGB[0];
             rgb[3 * offset + 1] += splatScale * splatRGB[1];
             rgb[3 * offset + 2] += splatScale * splatRGB[2];
+            
+            rgb[3 * offset] = std::max((Float)0, rgb[3 * offset]);
+            rgb[3 * offset + 1] = std::max((Float)0, rgb[3 * offset + 1]);
+            rgb[3 * offset + 2] = std::max((Float)0, rgb[3 * offset + 2]);
             
             // Scale pixel value by _scale_
             rgb[3 * offset] *= scale;

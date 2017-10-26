@@ -56,7 +56,7 @@ AOIntegrator::AOIntegrator(bool cosSample, int ns,
 
 Spectrum AOIntegrator::Li(const RayDifferential &r, const Scene &scene,
                           Sampler &sampler, MemoryArena &arena,
-                          bool& firstHitWasProxy,
+                          FirstIntersectionType& firstIntersectionType,
                           int depth) const {
     ProfilePhase p(Prof::SamplerIntegratorLi);
     Spectrum L(0.f);
@@ -66,8 +66,9 @@ Spectrum AOIntegrator::Li(const RayDifferential &r, const Scene &scene,
     SurfaceInteraction isect;
  retry:
     if (scene.Intersect(ray, &isect)) {
+        firstIntersectionType = isect.primitive->IsProxy() ? FirstIntersectionType::ProxyGeometry : FirstIntersectionType::SceneGeometry;
+        
         isect.ComputeScatteringFunctions(ray, arena, true);
-        firstHitWasProxy = isect.primitive->IsProxy();
         
         if (!isect.bsdf) {
             VLOG(2) << "Skipping intersection due to null bsdf";

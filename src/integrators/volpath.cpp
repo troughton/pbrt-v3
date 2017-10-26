@@ -54,7 +54,7 @@ void VolPathIntegrator::Preprocess(const Scene &scene, Sampler &sampler) {
 
 Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
                                Sampler &sampler, MemoryArena &arena,
-                               bool& firstHitWasProxy,
+                               FirstIntersectionType& firstIntersectionType,
                                int depth) const {
     ProfilePhase p(Prof::SamplerIntegratorLi);
     Spectrum L(0.f), beta(1.f);
@@ -104,9 +104,14 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
                 // Add emitted light at path vertex or from the environment
                 if (foundIntersection)
                     L += beta * isect.Le(-ray.d);
-                else
+                else {
                     for (const auto &light : scene.infiniteLights)
                         L += beta * light->Le(ray);
+                    
+                    if (bounces == 0 && !L.IsBlack()) {
+                        firstIntersectionType = FirstIntersectionType::InfiniteAreaLight;
+                    }
+                }
             }
 
             // Terminate path if ray escaped or _maxDepth_ was reached
@@ -116,7 +121,7 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
             isect.ComputeScatteringFunctions(ray, arena, true);
             
             if (bounces == 0) {
-                firstHitWasProxy = isect.primitive->IsProxy();
+                firstIntersectionType = isect.primitive->IsProxy() ? FirstIntersectionType::ProxyGeometry : FirstIntersectionType::SceneGeometry;
             }
             
             if (!isect.bsdf) {

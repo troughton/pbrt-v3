@@ -289,16 +289,16 @@ void SamplerIntegrator::Render(const DifferentialRenderingScenePair &scene) {
 
                     // Evaluate radiance along camera ray
                     Spectrum L(0.f);
-                    bool firstHitWasProxy = false;
+                    FirstIntersectionType firstIntersectionType = FirstIntersectionType::None;
                     if (rayWeight > 0) {
-                        L = Li(ray, *scene.scene, *tileSampler, arena, firstHitWasProxy);
-                        if (firstHitWasProxy) {
+                        L = Li(ray, *scene.scene, *tileSampler, arena, firstIntersectionType);
+                        if (firstIntersectionType == FirstIntersectionType::ProxyGeometry) {
                             ray.tMax += 1e-4; // offset the tMax slightly in case of any > tMax (rather than >= tMax) checks.
-                            L = L - Li(ray, *scene.proxyScene, *tileSampler, arena, firstHitWasProxy);
+                            L = L - Li(ray, *scene.proxyScene, *tileSampler, arena, firstIntersectionType);
                         }
                     }
                     
-
+                    
                     // Issue warning if unexpected radiance value returned
                     if (L.HasNaNs()) {
                         LOG(ERROR) << StringPrintf(
@@ -326,7 +326,9 @@ void SamplerIntegrator::Render(const DifferentialRenderingScenePair &scene) {
                         ray << " -> L = " << L;
 
                     // Add camera ray's contribution to image
-                    filmTile->AddSample(cameraSample.pFilm, L, rayWeight);
+                    if (!camera->film->hasBackgroundImage || firstIntersectionType != FirstIntersectionType::InfiniteAreaLight) {
+                        filmTile->AddSample(cameraSample.pFilm, L, rayWeight);
+                    }
 
                     // Free _MemoryArena_ memory from computing image sample
                     // value
@@ -379,8 +381,9 @@ Spectrum SamplerIntegrator::SpecularReflect(
             rd.ryDirection =
                 wi - dwody + 2.f * Vector3f(Dot(wo, ns) * dndy + dDNdy * ns);
         }
-        bool hitProxy = false;
-        return f * Li(rd, scene, sampler, arena, hitProxy, depth + 1) * AbsDot(wi, ns) /
+        
+        FirstIntersectionType firstIntersectionType = FirstIntersectionType::None;
+        return f * Li(rd, scene, sampler, arena, firstIntersectionType, depth + 1) * AbsDot(wi, ns) /
                pdf;
     } else
         return Spectrum(0.f);
@@ -430,8 +433,9 @@ Spectrum SamplerIntegrator::SpecularTransmit(
             rd.ryDirection =
                 wi + eta * dwody - Vector3f(mu * dndy + dmudy * ns);
         }
-        bool hitProxy = false;
-        L = f * Li(rd, scene, sampler, arena, hitProxy, depth + 1) * AbsDot(wi, ns) / pdf;
+        
+        FirstIntersectionType firstIntersectionType = FirstIntersectionType::None;
+        L = f * Li(rd, scene, sampler, arena, firstIntersectionType, depth + 1) * AbsDot(wi, ns) / pdf;
     }
     return L;
 }

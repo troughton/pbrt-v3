@@ -62,7 +62,7 @@ void DirectLightingIntegrator::Preprocess(const Scene &scene,
 Spectrum DirectLightingIntegrator::Li(const RayDifferential &ray,
                                       const Scene &scene, Sampler &sampler,
                                       MemoryArena &arena,
-                                      bool& firstHitWasProxy,
+                                      FirstIntersectionType& firstIntersectionType,
                                       int depth) const {
     ProfilePhase p(Prof::SamplerIntegratorLi);
     Spectrum L(0.f);
@@ -70,17 +70,22 @@ Spectrum DirectLightingIntegrator::Li(const RayDifferential &ray,
     SurfaceInteraction isect;
     if (!scene.Intersect(ray, &isect)) {
         for (const auto &light : scene.lights) L += light->Le(ray);
+        
+        if (!L.IsBlack()) {
+            firstIntersectionType = FirstIntersectionType::InfiniteAreaLight;
+        }
+        
         return L;
     }
 
     // Compute scattering functions for surface interaction
     isect.ComputeScatteringFunctions(ray, arena);
     
-    firstHitWasProxy = isect.primitive->IsProxy();
+    firstIntersectionType = isect.primitive->IsProxy() ? FirstIntersectionType::ProxyGeometry : FirstIntersectionType::SceneGeometry;
     
     if (!isect.bsdf) {
         bool hitProxy = false;
-        return Li(isect.SpawnRay(ray.d), scene, sampler, arena, hitProxy, depth);
+        return Li(isect.SpawnRay(ray.d), scene, sampler, arena, firstIntersectionType, depth);
     }
     
     Vector3f wo = isect.wo;
