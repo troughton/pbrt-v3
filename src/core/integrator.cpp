@@ -345,8 +345,9 @@ void SamplerIntegrator::Render(const DifferentialRenderingScenePair &scene) {
     }
     LOG(INFO) << "Rendering finished";
 
+    Float samplesPerPixel = this->sampler->samplesPerPixel;
     // Save final image after rendering
-    camera->film->WriteImage();
+    camera->film->WriteImage(samplesPerPixel);
 }
 
 Spectrum SamplerIntegrator::SpecularReflect(

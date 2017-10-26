@@ -460,7 +460,7 @@ void SPPMIntegrator::Render(const DifferentialRenderingScenePair &scenePair) {
                 }
             }
             camera->film->SetImage(image.get());
-            camera->film->WriteImage();
+            camera->film->WriteImage(1.f);
             // Write SPPM radius image, if requested
             if (getenv("SPPM_RADIUS")) {
                 std::unique_ptr<Float[]> rimg(

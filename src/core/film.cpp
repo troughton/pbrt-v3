@@ -171,7 +171,7 @@ namespace pbrt {
         for (int i = 0; i < 3; ++i) pixel.splatXYZ[i].Add(xyz[i]);
     }
     
-    void Film::WriteImage(Float splatScale) {
+    void Film::WriteImage(Float samplesPerPixel, Float splatScale) {
         // Convert image to RGB and compute final pixel values
         LOG(INFO) <<
         "Converting image to RGB and computing final weighted pixel values";
@@ -183,6 +183,8 @@ namespace pbrt {
             backgroundImage = ImageTexture<RGBSpectrum, Spectrum>::GetTexture(backgroundFilename, false, 8.0, ImageWrap::Black, backgroundScale, gammaCorrect);
         }
         
+        const Float expectedWeight = samplesPerPixel;
+        
         int offset = 0;
         for (Point2i p : croppedPixelBounds) {
             // Convert pixel XYZ color to RGB
@@ -192,22 +194,22 @@ namespace pbrt {
             // Normalize pixel with weight sum
             Float filterWeightSum = pixel.filterWeightSum;
             
-            bool backgroundBlend = hasBackgroundImage && filterWeightSum < 1.f;
+            Float alpha = hasBackgroundImage ? Clamp(filterWeightSum / expectedWeight, 0.f, 1.f) : 1.f;
             
             if (filterWeightSum != 0) {
-                Float invWt = backgroundBlend ? filterWeightSum : (Float)1 / filterWeightSum;
+                Float invWt = (Float)alpha / filterWeightSum;
                 
                 rgb[3 * offset] = rgb[3 * offset] * invWt;
                 rgb[3 * offset + 1] = rgb[3 * offset + 1] * invWt;
                 rgb[3 * offset + 2] = rgb[3 * offset + 2] * invWt;
             }
             
-            if (hasBackgroundImage && filterWeightSum < 1.f) {
+            if (hasBackgroundImage && alpha < 1.f) {
                 const Point2f st = Point2f((Float)p.x / (Float)(fullResolution.x - 1), 1.0 - (Float)p.y / (Float)(fullResolution.y - 1));
                 RGBSpectrum backgroundColour = backgroundImage->Lookup(st);
                 Float backgroundRGB[3];
                 backgroundColour.ToRGB(backgroundRGB);
-                Float weight = 1.f - filterWeightSum;
+                const Float weight = 1 - alpha;
                 
                 for (int i = 0; i < 3; i += 1) {
                     rgb[3 * offset + i] += backgroundRGB[i] * backgroundScale * weight;
