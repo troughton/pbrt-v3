@@ -43,13 +43,16 @@ namespace pbrt {
 // WhittedIntegrator Method Definitions
 Spectrum WhittedIntegrator::Li(const RayDifferential &ray, const Scene &scene,
                                Sampler &sampler, MemoryArena &arena,
-                               bool& firstHitWasProxy,
+                               FirstIntersectionType& firstIntersectionType,
                                int depth) const {
     Spectrum L(0.);
     // Find closest ray intersection or return background radiance
     SurfaceInteraction isect;
     if (!scene.Intersect(ray, &isect)) {
         for (const auto &light : scene.lights) L += light->Le(ray);
+        if (!L.IsBlack()) {
+            firstIntersectionType = FirstIntersectionType::InfiniteAreaLight;
+        }
         return L;
     }
 
@@ -61,11 +64,10 @@ Spectrum WhittedIntegrator::Li(const RayDifferential &ray, const Scene &scene,
 
     // Compute scattering functions for surface interaction
     isect.ComputeScatteringFunctions(ray, arena);
-    firstHitWasProxy = isect.primitive->IsProxy();
+    firstIntersectionType = isect.primitive->IsProxy() ? FirstIntersectionType::ProxyGeometry : FirstIntersectionType::SceneGeometry;
     
     if (!isect.bsdf) {
-        bool hitProxy = false;
-        return Li(isect.SpawnRay(ray.d), scene, sampler, arena, hitProxy, depth);
+        return Li(isect.SpawnRay(ray.d), scene, sampler, arena, firstIntersectionType, depth);
     }
     
 

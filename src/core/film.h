@@ -79,6 +79,7 @@ class Film {
     const std::string filename;
     const std::string backgroundFilename;
     Bounds2i croppedPixelBounds;
+    const bool hasBackgroundImage;
 
   private:
     // Film Private Data
@@ -96,7 +97,6 @@ class Film {
     const Float scale;
     const Float backgroundScale;
     const Float maxSampleLuminance;
-    const bool hasBackgroundImage;
 
     // Film Private Methods
     Pixel &GetPixel(const Point2i &p) {

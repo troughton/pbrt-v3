@@ -63,7 +63,7 @@ void PathIntegrator::Preprocess(const Scene &scene, Sampler &sampler) {
 
 Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
                             Sampler &sampler, MemoryArena &arena,
-                            bool& firstHitWasProxy,
+                            FirstIntersectionType& firstIntersectionType,
                             int depth) const {
     ProfilePhase p(Prof::SamplerIntegratorLi);
     Spectrum L(0.f), beta(1.f);
@@ -98,6 +98,9 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
                 for (const auto &light : scene.infiniteLights)
                     L += beta * light->Le(ray);
                 VLOG(2) << "Added infinite area lights -> L = " << L;
+                if (bounces == 0 && !L.IsBlack()) {
+                    firstIntersectionType = FirstIntersectionType::InfiniteAreaLight;
+                }
             }
         }
 
@@ -108,7 +111,7 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
         isect.ComputeScatteringFunctions(ray, arena, true);
         
         if (bounces == 0) {
-            firstHitWasProxy = isect.primitive->IsProxy();
+            firstIntersectionType = isect.primitive->IsProxy() ? FirstIntersectionType::ProxyGeometry : FirstIntersectionType::SceneGeometry;
         }
         
         if (!isect.bsdf) {
