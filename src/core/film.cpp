@@ -195,16 +195,15 @@ namespace pbrt {
             bool backgroundBlend = hasBackgroundImage && filterWeightSum < 1.f;
             
             if (filterWeightSum != 0) {
-                Float invWt = backgroundBlend ? 1.f : (Float)1 / filterWeightSum;
+                Float invWt = backgroundBlend ? filterWeightSum : (Float)1 / filterWeightSum;
                 
-                rgb[3 * offset] = std::max((Float)0, rgb[3 * offset] * invWt);
-                rgb[3 * offset + 1] =
-                std::max((Float)0, rgb[3 * offset + 1] * invWt);
+                rgb[3 * offset] = rgb[3 * offset] * invWt;
+                rgb[3 * offset + 1] = rgb[3 * offset + 1] * invWt;
                 rgb[3 * offset + 2] = rgb[3 * offset + 2] * invWt;
             }
             
             if (hasBackgroundImage && filterWeightSum < 1.f) {
-                const Point2f st = Point2f((Float)p.x / (Float)(fullResolution.x - 1), (Float)p.y / (Float)(fullResolution.y - 1));
+                const Point2f st = Point2f((Float)p.x / (Float)(fullResolution.x - 1), 1.0 - (Float)p.y / (Float)(fullResolution.y - 1));
                 RGBSpectrum backgroundColour = backgroundImage->Lookup(st);
                 Float backgroundRGB[3];
                 backgroundColour.ToRGB(backgroundRGB);
@@ -277,7 +276,7 @@ namespace pbrt {
         Float maxSampleLuminance = params.FindOneFloat("maxsampleluminance",
                                                        Infinity);
         
-        std::string backgroundFilename = params.FindOneString("backgroundfilename", "");
+        std::string backgroundFilename = params.FindOneFilename("backgroundfilename", "");
         Float backgroundScale = params.FindOneFloat("backgroundscale", 1.);
         
         return new Film(Point2i(xres, yres), crop, std::move(filter), diagonal,
