@@ -62,6 +62,7 @@ class Film {
          std::unique_ptr<Filter> filter, Float diagonal,
          const std::string &filename, Float scale,
          const std::string &backgroundImage, Float backgroundScale,
+         bool sceneHasProxyGeometry,
          Float maxSampleLuminance = Infinity);
     Bounds2i GetSampleBounds() const;
     Bounds2f GetPhysicalExtent() const;
@@ -90,13 +91,20 @@ class Film {
         AtomicFloat splatXYZ[3];
         Float pad;
     };
+    struct ProxyPixel {
+        ProxyPixel() { xyz[0] = xyz[1] = xyz[2] = filterWeightSum = 0; }
+        Float xyz[3];
+        Float filterWeightSum;
+    };
     std::unique_ptr<Pixel[]> pixels;
+    std::unique_ptr<ProxyPixel[]> proxyPixels;
     static PBRT_CONSTEXPR int filterTableWidth = 16;
     Float filterTable[filterTableWidth * filterTableWidth];
     std::mutex mutex;
     const Float scale;
     const Float backgroundScale;
     const Float maxSampleLuminance;
+    const bool sceneHasProxyGeometry;
 
     // Film Private Methods
     Pixel &GetPixel(const Point2i &p) {
@@ -106,6 +114,14 @@ class Film {
                      (p.y - croppedPixelBounds.pMin.y) * width;
         return pixels[offset];
     }
+    
+    ProxyPixel &GetProxyPixel(const Point2i &p) {
+        CHECK(InsideExclusive(p, croppedPixelBounds));
+        int width = croppedPixelBounds.pMax.x - croppedPixelBounds.pMin.x;
+        int offset = (p.x - croppedPixelBounds.pMin.x) +
+        (p.y - croppedPixelBounds.pMin.y) * width;
+        return proxyPixels[offset];
+    }
 };
 
 class FilmTile {
@@ -113,16 +129,20 @@ class FilmTile {
     // FilmTile Public Methods
     FilmTile(const Bounds2i &pixelBounds, const Vector2f &filterRadius,
              const Float *filterTable, int filterTableSize,
-             Float maxSampleLuminance)
+             Float maxSampleLuminance,
+             bool hasProxyGeometry)
         : pixelBounds(pixelBounds),
           filterRadius(filterRadius),
           invFilterRadius(1 / filterRadius.x, 1 / filterRadius.y),
           filterTable(filterTable),
           filterTableSize(filterTableSize),
           maxSampleLuminance(maxSampleLuminance) {
-        pixels = std::vector<FilmTilePixel>(std::max(0, pixelBounds.Area()));
+              pixels = std::vector<FilmTilePixel>(std::max(0, pixelBounds.Area()));
+              if (hasProxyGeometry) {
+                  proxyPixels = std::vector<FilmTilePixel>(std::max(0, pixelBounds.Area()));
+              }
     }
-    void AddSample(const Point2f &pFilm, Spectrum L,
+    void AddSample(const Point2f &pFilm, Spectrum L, bool proxySample = false,
                    Float sampleWeight = 1.) {
         ProfilePhase _(Prof::AddFilmSample);
         if (L.y() > maxSampleLuminance)
@@ -157,7 +177,7 @@ class FilmTile {
                 Float filterWeight = filterTable[offset];
 
                 // Update pixel values with filtered sample contribution
-                FilmTilePixel &pixel = GetPixel(Point2i(x, y));
+                FilmTilePixel &pixel = proxySample ? GetProxyPixel(Point2i(x, y)) : GetPixel(Point2i(x, y));
                 pixel.contribSum += L * sampleWeight * filterWeight;
                 pixel.filterWeightSum += filterWeight;
             }
@@ -177,6 +197,20 @@ class FilmTile {
             (p.x - pixelBounds.pMin.x) + (p.y - pixelBounds.pMin.y) * width;
         return pixels[offset];
     }
+    FilmTilePixel &GetProxyPixel(const Point2i &p) {
+        CHECK(InsideExclusive(p, pixelBounds));
+        int width = pixelBounds.pMax.x - pixelBounds.pMin.x;
+        int offset =
+        (p.x - pixelBounds.pMin.x) + (p.y - pixelBounds.pMin.y) * width;
+        return proxyPixels[offset];
+    }
+    const FilmTilePixel &GetProxyPixel(const Point2i &p) const {
+        CHECK(InsideExclusive(p, pixelBounds));
+        int width = pixelBounds.pMax.x - pixelBounds.pMin.x;
+        int offset =
+        (p.x - pixelBounds.pMin.x) + (p.y - pixelBounds.pMin.y) * width;
+        return proxyPixels[offset];
+    }
     Bounds2i GetPixelBounds() const { return pixelBounds; }
 
   private:
@@ -186,6 +220,7 @@ class FilmTile {
     const Float *filterTable;
     const int filterTableSize;
     std::vector<FilmTilePixel> pixels;
+    std::vector<FilmTilePixel> proxyPixels;
     const Float maxSampleLuminance;
     friend class Film;
 };

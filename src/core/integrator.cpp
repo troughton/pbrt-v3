@@ -290,11 +290,18 @@ void SamplerIntegrator::Render(const DifferentialRenderingScenePair &scene) {
                     // Evaluate radiance along camera ray
                     Spectrum L(0.f);
                     FirstIntersectionType firstIntersectionType = FirstIntersectionType::None;
+                    
+                    int64_t sampleNumber = tileSampler->CurrentSampleNumber();
+                    
                     if (rayWeight > 0) {
                         L = Li(ray, *scene.scene, *tileSampler, arena, firstIntersectionType);
                         if (firstIntersectionType == FirstIntersectionType::ProxyGeometry) {
+                            tileSampler->SetSampleNumber(sampleNumber);
+                            tileSampler->GetCameraSample(pixel); // bring the sampler back to the same place.
+                            
                             ray.tMax += 1e-4; // offset the tMax slightly in case of any > tMax (rather than >= tMax) checks.
-                            L = L - Li(ray, *scene.proxyScene, *tileSampler, arena, firstIntersectionType);
+                            
+                            L = L - Li(ray, *scene.proxyScene, *tileSampler, arena, firstIntersectionType);;
                         }
                     }
                     
@@ -327,7 +334,7 @@ void SamplerIntegrator::Render(const DifferentialRenderingScenePair &scene) {
 
                     // Add camera ray's contribution to image
                     if (!camera->film->hasBackgroundImage || firstIntersectionType != FirstIntersectionType::InfiniteAreaLight) {
-                        filmTile->AddSample(cameraSample.pFilm, L, rayWeight);
+                        filmTile->AddSample(cameraSample.pFilm, L, firstIntersectionType == FirstIntersectionType::ProxyGeometry, rayWeight);
                     }
 
                     // Free _MemoryArena_ memory from computing image sample

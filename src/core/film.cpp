@@ -47,6 +47,7 @@ namespace pbrt {
                std::unique_ptr<Filter> filt, Float diagonal,
                const std::string &filename, Float scale,
                const std::string &backgroundImageName, Float backgroundScale,
+               bool sceneHasProxyGeometry,
                Float maxSampleLuminance)
     : fullResolution(resolution),
     diagonal(diagonal * .001),
@@ -56,7 +57,8 @@ namespace pbrt {
     hasBackgroundImage(!backgroundImageName.empty()),
     scale(scale),
     backgroundScale(backgroundScale),
-    maxSampleLuminance(maxSampleLuminance) {
+    maxSampleLuminance(maxSampleLuminance),
+    sceneHasProxyGeometry(sceneHasProxyGeometry) {
         // Compute film image bounds
         croppedPixelBounds =
         Bounds2i(Point2i(std::ceil(fullResolution.x * cropWindow.pMin.x),
@@ -70,6 +72,11 @@ namespace pbrt {
         // Allocate film image storage
         pixels = std::unique_ptr<Pixel[]>(new Pixel[croppedPixelBounds.Area()]);
         filmPixelMemory += croppedPixelBounds.Area() * sizeof(Pixel);
+        
+        if (sceneHasProxyGeometry) {
+            proxyPixels = std::unique_ptr<ProxyPixel[]>(new ProxyPixel[croppedPixelBounds.Area()]);
+            filmPixelMemory += croppedPixelBounds.Area() * sizeof(ProxyPixel);
+        }
         
         // Precompute filter weight table
         int offset = 0;
@@ -108,15 +115,25 @@ namespace pbrt {
         Bounds2i tilePixelBounds = Intersect(Bounds2i(p0, p1), croppedPixelBounds);
         return std::unique_ptr<FilmTile>(new FilmTile(
                                                       tilePixelBounds, filter->radius, filterTable, filterTableWidth,
+                                                      this->sceneHasProxyGeometry,
                                                       maxSampleLuminance));
     }
     
     void Film::Clear() {
         for (Point2i p : croppedPixelBounds) {
-            Pixel &pixel = GetPixel(p);
-            for (int c = 0; c < 3; ++c)
-                pixel.splatXYZ[c] = pixel.xyz[c] = 0;
-            pixel.filterWeightSum = 0;
+            {
+                Pixel &pixel = GetPixel(p);
+                for (int c = 0; c < 3; ++c)
+                    pixel.splatXYZ[c] = pixel.xyz[c] = 0;
+                pixel.filterWeightSum = 0;
+            }
+            
+            {
+                ProxyPixel &pixel = GetProxyPixel(p);
+                for (int c = 0; c < 3; ++c)
+                    pixel.xyz[c] = 0;
+                pixel.filterWeightSum = 0;
+            }
         }
     }
     
@@ -132,6 +149,15 @@ namespace pbrt {
             tilePixel.contribSum.ToXYZ(xyz);
             for (int i = 0; i < 3; ++i) mergePixel.xyz[i] += xyz[i];
             mergePixel.filterWeightSum += tilePixel.filterWeightSum;
+            
+            if (this->sceneHasProxyGeometry) {
+                const FilmTilePixel &tileProxyPixel = tile->GetProxyPixel(pixel);
+                ProxyPixel &mergePixel = GetProxyPixel(pixel);
+                Float xyz[3];
+                tileProxyPixel.contribSum.ToXYZ(xyz);
+                for (int i = 0; i < 3; ++i) mergePixel.xyz[i] += xyz[i];
+                mergePixel.filterWeightSum += tileProxyPixel.filterWeightSum;
+            }
         }
     }
     
@@ -213,6 +239,24 @@ namespace pbrt {
                 
                 for (int i = 0; i < 3; i += 1) {
                     rgb[3 * offset + i] += backgroundRGB[i] * backgroundScale * weight;
+                }
+                
+                if (this->sceneHasProxyGeometry) {
+                    
+                    ProxyPixel &proxyPixel = GetProxyPixel(p);
+                    
+                    if (proxyPixel.filterWeightSum != 0) {
+                        
+                        Float proxyRGB[3];
+                        XYZToRGB(proxyPixel.xyz, proxyRGB);
+                        
+                        Float invWt = (Float)weight / proxyPixel.filterWeightSum;
+                        
+                        for (int i = 0; i < 3; i += 1) {
+                            rgb[3 * offset + i] += proxyRGB[i] * invWt;
+                        }
+                        
+                    }
                 }
             }
             

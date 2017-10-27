@@ -1196,6 +1196,7 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
             }
             prims.push_back(
                 std::make_shared<GeometricPrimitive>(s, mtl, area, mi, graphicsState.proxyGeometry));
+            renderOptions->haveProxyGeometry = renderOptions->haveProxyGeometry || graphicsState.proxyGeometry;
         }
     } else {
         // Initialize _prims_ and _areaLights_ for animated shape
@@ -1219,6 +1220,7 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
             prims.push_back(
                 std::make_shared<GeometricPrimitive>(s, mtl, nullptr, mi, graphicsState.proxyGeometry));
 
+        renderOptions->haveProxyGeometry = renderOptions->haveProxyGeometry || graphicsState.proxyGeometry;
         // Create single _TransformedPrimitive_ for _prims_
 
         // Get _animatedObjectToWorld_ transform for shape
