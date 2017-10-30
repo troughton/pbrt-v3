@@ -128,7 +128,6 @@ IDENT [a-zA-Z_][a-zA-Z_0-9]*
 <COMMENT>. { /* eat it up */ if (pbrt::PbrtOptions.cat || pbrt::PbrtOptions.toPly) putchar(yytext[0]); }
 <COMMENT>\n { pbrt::line_num++; if (pbrt::PbrtOptions.cat || pbrt::PbrtOptions.toPly) putchar('\n'); BEGIN INITIAL; }
 Accelerator             { return ACCELERATOR; }
-ActiveTransform         { return ACTIVETRANSFORM; }
 All                     { return ALL; }
 AreaLightSource         { return AREALIGHTSOURCE; }
 AttributeBegin          { return ATTRIBUTEBEGIN; }
@@ -138,9 +137,11 @@ ConcatTransform         { return CONCATTRANSFORM; }
 CoordinateSystem        { return COORDINATESYSTEM; }
 CoordSysTransform       { return COORDSYSTRANSFORM; }
 EndTime                 { return ENDTIME; }
+EndAnimationKeyframes   { return ENDANIMATIONKEYFRAMES; }
 Film                    { return FILM; }
 Identity                { return IDENTITY; }
 Include                 { return INCLUDE; }
+Keyframe                { return KEYFRAME; }
 LightSource             { return LIGHTSOURCE; }
 LookAt                  { return LOOKAT; }
 MakeNamedMedium         { return MAKENAMEDMEDIUM; }
@@ -163,7 +164,6 @@ Integrator              { return INTEGRATOR; }
 Texture                 { return TEXTURE; }
 TransformBegin          { return TRANSFORMBEGIN; }
 TransformEnd            { return TRANSFORMEND; }
-TransformTimes          { return TRANSFORMTIMES; }
 Transform               { return TRANSFORM; }
 Translate               { return TRANSLATE; }
 WorldBegin              { return WORLDBEGIN; }

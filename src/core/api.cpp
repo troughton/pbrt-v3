@@ -121,47 +121,75 @@ namespace pbrt {
 
 // API Global Variables
 Options PbrtOptions;
+    
+    struct Keyframe {
+        Float time;
+        Transform t;
+        
+        Keyframe(Float time, Transform t) : time(time), t(t) {
+            
+        }
+    };
+    
+    struct TransformSet {
+        
+        TransformSet() : isAnimated(false) {
+            this->keyframes.push_back(Keyframe(0.f, Transform()));
+        }
+        
+        TransformSet(const TransformSet &ts) : keyframes(ts.keyframes), isAnimated(ts.isAnimated) {
+        }
+        
+        const Transform& ActiveTransform() const {
+            return this->keyframes.back().t;
+        }
+        
+        Transform& ActiveTransform() {
+            return this->keyframes.back().t;
+        }
+        
+        friend TransformSet Inverse(const TransformSet &ts) {
+            TransformSet tInv(ts);
+            for (Keyframe &keyframe : tInv.keyframes) {
+                keyframe.t = Inverse(keyframe.t);
+            }
+            return tInv;
+        }
+        
+        bool IsAnimated() const {
+            return this->isAnimated;
+        }
+        
+        const std::vector<Keyframe>& Keyframes() const {
+            return keyframes;
+        }
+        
+        void AddKeyframe(Float time) {
+            if (!this->isAnimated) {
+                this->keyframes.back().time = time;
+                this->isAnimated = true;
+            } else {
+                if (time < this->keyframes.back().time) {
+                    Error("Keyframe time %.2f is earlier than previous time %.2f.", time, this->keyframes.back().time);
+                }
+                this->keyframes.push_back(Keyframe(time, this->ActiveTransform()));
+            }
+        }
+        
+    private:
+        std::vector<Keyframe> keyframes;
+        bool isAnimated;
+    };
 
-// API Local Classes
-PBRT_CONSTEXPR int MaxTransforms = 2;
-PBRT_CONSTEXPR int StartTransformBits = 1 << 0;
-PBRT_CONSTEXPR int EndTransformBits = 1 << 1;
-PBRT_CONSTEXPR int AllTransformsBits = (1 << MaxTransforms) - 1;
-struct TransformSet {
-    // TransformSet Public Methods
-    Transform &operator[](int i) {
-        CHECK_GE(i, 0);
-        CHECK_LT(i, MaxTransforms);
-        return t[i];
-    }
-    const Transform &operator[](int i) const {
-        CHECK_GE(i, 0);
-        CHECK_LT(i, MaxTransforms);
-        return t[i];
-    }
-    friend TransformSet Inverse(const TransformSet &ts) {
-        TransformSet tInv;
-        for (int i = 0; i < MaxTransforms; ++i) tInv.t[i] = Inverse(ts.t[i]);
-        return tInv;
-    }
-    bool IsAnimated() const {
-        for (int i = 0; i < MaxTransforms - 1; ++i)
-            if (t[i] != t[i + 1]) return true;
-        return false;
-    }
-
-  private:
-    Transform t[MaxTransforms];
-};
-
+    
+    
 struct RenderOptions {
     // RenderOptions Public Methods
-    Integrator *MakeIntegrator() const;
-    DifferentialRenderingScenePair *MakeScene();
-    Camera *MakeCamera() const;
+    Integrator *MakeIntegrator(Float startTime) const;
+    DifferentialRenderingScenePair *MakeScene(Float startTime, Float endTime);
+    Camera *MakeCamera(Float startTime) const;
 
     // RenderOptions Public Data
-    Float transformStartTime = 0, transformEndTime = 1;
     std::string FilterName = "box";
     ParamSet FilterParams;
     std::string FilmName = "image";
@@ -182,6 +210,10 @@ struct RenderOptions {
     std::vector<std::shared_ptr<Primitive>> *currentInstance = nullptr;
     bool haveScatteringMedia = false;
     bool haveProxyGeometry = false;
+    
+    size_t frameCount = 1;
+    Float firstFrameTime = 0.0;
+    Float frameInterval = 1.0 / 24.0;
 };
 
 struct GraphicsState {
@@ -235,7 +267,6 @@ class TransformCache {
 enum class APIState { Uninitialized, OptionsBlock, WorldBlock };
 static APIState currentApiState = APIState::Uninitialized;
 static TransformSet curTransform;
-static uint32_t activeTransformBits = AllTransformsBits;
 static std::map<std::string, TransformSet> namedCoordinateSystems;
 static std::unique_ptr<RenderOptions> renderOptions;
 static GraphicsState graphicsState;
@@ -282,11 +313,7 @@ std::vector<std::shared_ptr<Shape>> MakeShapes(const std::string &name,
             func);                                           \
         return;                                              \
     } else /* swallow trailing semicolon */
-#define FOR_ACTIVE_TRANSFORMS(expr)           \
-    for (int i = 0; i < MaxTransforms; ++i)   \
-        if (activeTransformBits & (1 << i)) { \
-            expr                              \
-        }
+
 #define WARN_IF_ANIMATED_TRANSFORM(func)                             \
     do {                                                             \
         if (curTransform.IsAnimated())                               \
@@ -642,12 +669,13 @@ std::shared_ptr<AreaLight> MakeAreaLight(const std::string &name,
 std::shared_ptr<Primitive> MakeAccelerator(
     const std::string &name,
     const std::vector<std::shared_ptr<Primitive>> &prims,
+                                           Float startTime, Float endTime,
     const ParamSet &paramSet) {
     std::shared_ptr<Primitive> accel;
     if (name == "bvh")
-        accel = CreateBVHAccelerator(prims, paramSet);
+        accel = CreateBVHAccelerator(prims, startTime, endTime, paramSet);
     else if (name == "kdtree")
-        accel = CreateKdTreeAccelerator(prims, paramSet);
+        accel = CreateKdTreeAccelerator(prims, startTime, endTime, paramSet);
     else
         Warning("Accelerator \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();
@@ -655,29 +683,33 @@ std::shared_ptr<Primitive> MakeAccelerator(
 }
 
 Camera *MakeCamera(const std::string &name, const ParamSet &paramSet,
-                   const TransformSet &cam2worldSet, Float transformStart,
-                   Float transformEnd, Film *film) {
+                   const TransformSet &cam2worldSet, Film *film,
+                   Float shutterOpenTime) {
     Camera *camera = nullptr;
     MediumInterface mediumInterface = graphicsState.CreateMediumInterface();
-    static_assert(MaxTransforms == 2,
-                  "TransformCache assumes only two transforms");
-    Transform *cam2world[2];
-    transformCache.Lookup(cam2worldSet[0], &cam2world[0], nullptr);
-    transformCache.Lookup(cam2worldSet[1], &cam2world[1], nullptr);
-    AnimatedTransform animatedCam2World(cam2world[0], transformStart,
-                                        cam2world[1], transformEnd);
+    
+    std::vector<TransformKeyframe> transformKeyframes;
+    
+    for (const Keyframe& keyframe : cam2worldSet.Keyframes()) {
+        Transform *t;
+        transformCache.Lookup(keyframe.t, &t, nullptr);
+        transformKeyframes.push_back(TransformKeyframe(t, keyframe.time));
+    }
+    
+    AnimatedTransform animatedCam2World(transformKeyframes);
+    
     if (name == "perspective")
         camera = CreatePerspectiveCamera(paramSet, animatedCam2World, film,
-                                         mediumInterface.outside);
+                                         mediumInterface.outside, shutterOpenTime);
     else if (name == "orthographic")
         camera = CreateOrthographicCamera(paramSet, animatedCam2World, film,
-                                          mediumInterface.outside);
+                                          mediumInterface.outside, shutterOpenTime);
     else if (name == "realistic")
         camera = CreateRealisticCamera(paramSet, animatedCam2World, film,
-                                       mediumInterface.outside);
+                                       mediumInterface.outside, shutterOpenTime);
     else if (name == "environment")
         camera = CreateEnvironmentCamera(paramSet, animatedCam2World, film,
-                                         mediumInterface.outside);
+                                         mediumInterface.outside, shutterOpenTime);
     else
         Warning("Camera \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();
@@ -770,15 +802,15 @@ void pbrtCleanup() {
 
 void pbrtIdentity() {
     VERIFY_INITIALIZED("Identity");
-    FOR_ACTIVE_TRANSFORMS(curTransform[i] = Transform();)
+    curTransform.ActiveTransform() = Transform();
     if (PbrtOptions.cat || PbrtOptions.toPly)
         printf("%*sIdentity\n", catIndentCount, "");
 }
 
 void pbrtTranslate(Float dx, Float dy, Float dz) {
     VERIFY_INITIALIZED("Translate");
-    FOR_ACTIVE_TRANSFORMS(curTransform[i] = curTransform[i] *
-                                            Translate(Vector3f(dx, dy, dz));)
+    curTransform.ActiveTransform() = curTransform.ActiveTransform() *
+                                            Translate(Vector3f(dx, dy, dz));
     if (PbrtOptions.cat || PbrtOptions.toPly)
         printf("%*sTranslate %.9g %.9g %.9g\n", catIndentCount, "", dx, dy,
                dz);
@@ -786,12 +818,11 @@ void pbrtTranslate(Float dx, Float dy, Float dz) {
 
 void pbrtTransform(Float tr[16]) {
     VERIFY_INITIALIZED("Transform");
-    FOR_ACTIVE_TRANSFORMS(
-        curTransform[i] = Transform(Matrix4x4(
+    curTransform.ActiveTransform() = Transform(Matrix4x4(
                                               tr[0], tr[4], tr[8], tr[12],
                                               tr[1], tr[5], tr[9], tr[13],
                                               tr[2], tr[6], tr[10], tr[14],
-                                              tr[3], tr[7], tr[11], tr[15]));)
+                                              tr[3], tr[7], tr[11], tr[15]));
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("%*sTransform [ ", catIndentCount, "");
         for (int i = 0; i < 16; ++i) printf("%.9g ", tr[i]);
@@ -801,13 +832,12 @@ void pbrtTransform(Float tr[16]) {
 
 void pbrtConcatTransform(Float tr[16]) {
     VERIFY_INITIALIZED("ConcatTransform");
-    FOR_ACTIVE_TRANSFORMS(
-        curTransform[i] =
-            curTransform[i] *
+    curTransform.ActiveTransform() =
+            curTransform.ActiveTransform() *
             Transform(Matrix4x4(tr[0], tr[4], tr[8], tr[12],
                                 tr[1], tr[5], tr[9], tr[13],
                                 tr[2], tr[6], tr[10], tr[14],
-                                tr[3], tr[7], tr[11], tr[15]));)
+                                tr[3], tr[7], tr[11], tr[15]));
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("%*sConcatTransform [ ", catIndentCount, "");
         for (int i = 0; i < 16; ++i) printf("%.9g ", tr[i]);
@@ -817,9 +847,9 @@ void pbrtConcatTransform(Float tr[16]) {
 
 void pbrtRotate(Float angle, Float dx, Float dy, Float dz) {
     VERIFY_INITIALIZED("Rotate");
-    FOR_ACTIVE_TRANSFORMS(curTransform[i] =
-                              curTransform[i] *
-                              Rotate(angle, Vector3f(dx, dy, dz));)
+    curTransform.ActiveTransform() =
+                              curTransform.ActiveTransform() *
+                              Rotate(angle, Vector3f(dx, dy, dz));
     if (PbrtOptions.cat || PbrtOptions.toPly)
         printf("%*sRotate %.9g %.9g %.9g %.9g\n", catIndentCount, "", angle,
                dx, dy, dz);
@@ -827,8 +857,8 @@ void pbrtRotate(Float angle, Float dx, Float dy, Float dz) {
 
 void pbrtScale(Float sx, Float sy, Float sz) {
     VERIFY_INITIALIZED("Scale");
-    FOR_ACTIVE_TRANSFORMS(curTransform[i] =
-                              curTransform[i] * Scale(sx, sy, sz);)
+    curTransform.ActiveTransform() =
+                              curTransform.ActiveTransform() * Scale(sx, sy, sz);
     if (PbrtOptions.cat || PbrtOptions.toPly)
         printf("%*sScale %.9g %.9g %.9g\n", catIndentCount, "", sx, sy, sz);
 }
@@ -838,7 +868,7 @@ void pbrtLookAt(Float ex, Float ey, Float ez, Float lx, Float ly, Float lz,
     VERIFY_INITIALIZED("LookAt");
     Transform lookAt =
         LookAt(Point3f(ex, ey, ez), Point3f(lx, ly, lz), Vector3f(ux, uy, uz));
-    FOR_ACTIVE_TRANSFORMS(curTransform[i] = curTransform[i] * lookAt;);
+    curTransform.ActiveTransform() = curTransform.ActiveTransform() * lookAt;
     if (PbrtOptions.cat || PbrtOptions.toPly)
         printf(
             "%*sLookAt %.9g %.9g %.9g\n%*s%.9g %.9g %.9g\n"
@@ -864,33 +894,6 @@ void pbrtCoordSysTransform(const std::string &name) {
     if (PbrtOptions.cat || PbrtOptions.toPly)
         printf("%*sCoordSysTransform \"%s\"\n", catIndentCount, "",
                name.c_str());
-}
-
-void pbrtActiveTransformAll() {
-    activeTransformBits = AllTransformsBits;
-    if (PbrtOptions.cat || PbrtOptions.toPly)
-        printf("%*sActiveTransform All\n", catIndentCount, "");
-}
-
-void pbrtActiveTransformEndTime() {
-    activeTransformBits = EndTransformBits;
-    if (PbrtOptions.cat || PbrtOptions.toPly)
-        printf("%*sActiveTransform EndTime\n", catIndentCount, "");
-}
-
-void pbrtActiveTransformStartTime() {
-    activeTransformBits = StartTransformBits;
-    if (PbrtOptions.cat || PbrtOptions.toPly)
-        printf("%*sActiveTransform StartTime\n", catIndentCount, "");
-}
-
-void pbrtTransformTimes(Float start, Float end) {
-    VERIFY_OPTIONS("TransformTimes");
-    renderOptions->transformStartTime = start;
-    renderOptions->transformEndTime = end;
-    if (PbrtOptions.cat || PbrtOptions.toPly)
-        printf("%*sTransformTimes %.9g %.9g\n", catIndentCount, "", start,
-               end);
 }
 
 void pbrtPixelFilter(const std::string &name, const ParamSet &params) {
@@ -969,7 +972,7 @@ void pbrtMakeNamedMedium(const std::string &name, const ParamSet &params) {
         Error("No parameter string \"type\" found in MakeNamedMedium");
     else {
         std::shared_ptr<Medium> medium =
-            MakeMedium(type, params, curTransform[0]);
+            MakeMedium(type, params, curTransform.ActiveTransform());
         if (medium) renderOptions->namedMedia[name] = medium;
     }
     if (PbrtOptions.cat || PbrtOptions.toPly) {
@@ -993,8 +996,7 @@ void pbrtMediumInterface(const std::string &insideName,
 void pbrtWorldBegin() {
     VERIFY_OPTIONS("WorldBegin");
     currentApiState = APIState::WorldBlock;
-    for (int i = 0; i < MaxTransforms; ++i) curTransform[i] = Transform();
-    activeTransformBits = AllTransformsBits;
+    curTransform = TransformSet();
     namedCoordinateSystems["world"] = curTransform;
     if (PbrtOptions.cat || PbrtOptions.toPly)
         printf("\n\nWorldBegin\n\n");
@@ -1004,7 +1006,6 @@ void pbrtAttributeBegin() {
     VERIFY_WORLD("AttributeBegin");
     pushedGraphicsStates.push_back(graphicsState);
     pushedTransforms.push_back(curTransform);
-    pushedActiveTransformBits.push_back(activeTransformBits);
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("\n%*sAttributeBegin\n", catIndentCount, "");
         catIndentCount += 4;
@@ -1023,7 +1024,6 @@ void pbrtAttributeEnd() {
     pushedGraphicsStates.pop_back();
     curTransform = pushedTransforms.back();
     pushedTransforms.pop_back();
-    activeTransformBits = pushedActiveTransformBits.back();
     pushedActiveTransformBits.pop_back();
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         catIndentCount -= 4;
@@ -1034,7 +1034,6 @@ void pbrtAttributeEnd() {
 void pbrtTransformBegin() {
     VERIFY_WORLD("TransformBegin");
     pushedTransforms.push_back(curTransform);
-    pushedActiveTransformBits.push_back(activeTransformBits);
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("%*sTransformBegin\n", catIndentCount, "");
         catIndentCount += 4;
@@ -1051,12 +1050,19 @@ void pbrtTransformEnd() {
     }
     curTransform = pushedTransforms.back();
     pushedTransforms.pop_back();
-    activeTransformBits = pushedActiveTransformBits.back();
     pushedActiveTransformBits.pop_back();
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         catIndentCount -= 4;
         printf("%*sTransformEnd\n", catIndentCount, "");
     }
+}
+    
+void pbrtKeyframe(Float time) {
+    curTransform.AddKeyframe(time);
+}
+    
+void pbrtEndAnimationKeyframes() {
+    curTransform = TransformSet();
 }
 
 void pbrtTexture(const std::string &name, const std::string &type,
@@ -1071,7 +1077,7 @@ void pbrtTexture(const std::string &name, const std::string &type,
             Warning("Texture \"%s\" being redefined", name.c_str());
         WARN_IF_ANIMATED_TRANSFORM("Texture");
         std::shared_ptr<Texture<Float>> ft =
-            MakeFloatTexture(texname, curTransform[0], tp);
+            MakeFloatTexture(texname, curTransform.ActiveTransform(), tp);
         if (ft) graphicsState.floatTextures[name] = ft;
     } else if (type == "color" || type == "spectrum") {
         // Create _color_ texture and store in _spectrumTextures_
@@ -1080,7 +1086,7 @@ void pbrtTexture(const std::string &name, const std::string &type,
             Warning("Texture \"%s\" being redefined", name.c_str());
         WARN_IF_ANIMATED_TRANSFORM("Texture");
         std::shared_ptr<Texture<Spectrum>> st =
-            MakeSpectrumTexture(texname, curTransform[0], tp);
+            MakeSpectrumTexture(texname, curTransform.ActiveTransform(), tp);
         if (st) graphicsState.spectrumTextures[name] = st;
     } else
         Error("Texture type \"%s\" unknown.", type.c_str());
@@ -1140,7 +1146,7 @@ void pbrtLightSource(const std::string &name, const ParamSet &params) {
     VERIFY_WORLD("LightSource");
     WARN_IF_ANIMATED_TRANSFORM("LightSource");
     MediumInterface mi = graphicsState.CreateMediumInterface();
-    std::shared_ptr<Light> lt = MakeLight(name, params, curTransform[0], mi);
+    std::shared_ptr<Light> lt = MakeLight(name, params, curTransform.ActiveTransform(), mi);
     if (!lt)
         Error("LightSource: light type \"%s\" unknown.", name.c_str());
     else
@@ -1178,7 +1184,7 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
 
         // Create shapes for shape _name_
         Transform *ObjToWorld, *WorldToObj;
-        transformCache.Lookup(curTransform[0], &ObjToWorld, &WorldToObj);
+        transformCache.Lookup(curTransform.ActiveTransform(), &ObjToWorld, &WorldToObj);
         std::vector<std::shared_ptr<Shape>> shapes =
             MakeShapes(name, ObjToWorld, WorldToObj,
                        graphicsState.reverseOrientation, params);
@@ -1190,7 +1196,7 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
             // Possibly create area light for shape
             std::shared_ptr<AreaLight> area;
             if (graphicsState.areaLight != "") {
-                area = MakeAreaLight(graphicsState.areaLight, curTransform[0],
+                area = MakeAreaLight(graphicsState.areaLight, curTransform.ActiveTransform(),
                                      mi, graphicsState.areaLightParams, s);
                 if (area) areaLights.push_back(area);
             }
@@ -1223,17 +1229,18 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
         renderOptions->haveProxyGeometry = renderOptions->haveProxyGeometry || graphicsState.proxyGeometry;
         // Create single _TransformedPrimitive_ for _prims_
 
-        // Get _animatedObjectToWorld_ transform for shape
-        static_assert(MaxTransforms == 2,
-                      "TransformCache assumes only two transforms");
-        Transform *ObjToWorld[2];
-        transformCache.Lookup(curTransform[0], &ObjToWorld[0], nullptr);
-        transformCache.Lookup(curTransform[1], &ObjToWorld[1], nullptr);
-        AnimatedTransform animatedObjectToWorld(
-            ObjToWorld[0], renderOptions->transformStartTime, ObjToWorld[1],
-            renderOptions->transformEndTime);
+        std::vector<TransformKeyframe> transformKeyframes;
+        
+        for (const Keyframe& keyframe : curTransform.Keyframes()) {
+            Transform *t;
+            transformCache.Lookup(keyframe.t, &t, nullptr);
+            transformKeyframes.push_back(TransformKeyframe(t, keyframe.time));
+        }
+        
+        AnimatedTransform animatedObjectToWorld(transformKeyframes);
+        
         if (prims.size() > 1) {
-            std::shared_ptr<Primitive> bvh = std::make_shared<BVHAccel>(prims);
+            std::shared_ptr<Primitive> bvh = std::make_shared<BVHAccel>(prims, curTransform.Keyframes().front().time, curTransform.Keyframes().back().time);
             prims.clear();
             prims.push_back(bvh);
         }
@@ -1357,20 +1364,26 @@ void pbrtObjectInstance(const std::string &name) {
         // Create aggregate for instance _Primitive_s
         std::shared_ptr<Primitive> accel(
             MakeAccelerator(renderOptions->AcceleratorName, in,
-                            renderOptions->AcceleratorParams));
-        if (!accel) accel = std::make_shared<BVHAccel>(in);
+                            curTransform.Keyframes().front().time,
+                            curTransform.Keyframes().back().time,
+                            renderOptions->AcceleratorParams
+                            ));
+        if (!accel) accel = std::make_shared<BVHAccel>(in, curTransform.Keyframes().front().time,
+                                                       curTransform.Keyframes().back().time);
         in.erase(in.begin(), in.end());
         in.push_back(accel);
     }
-    static_assert(MaxTransforms == 2,
-                  "TransformCache assumes only two transforms");
-    // Create _animatedInstanceToWorld_ transform for instance
-    Transform *InstanceToWorld[2];
-    transformCache.Lookup(curTransform[0], &InstanceToWorld[0], nullptr);
-    transformCache.Lookup(curTransform[1], &InstanceToWorld[1], nullptr);
-    AnimatedTransform animatedInstanceToWorld(
-        InstanceToWorld[0], renderOptions->transformStartTime,
-        InstanceToWorld[1], renderOptions->transformEndTime);
+    
+    std::vector<TransformKeyframe> transformKeyframes;
+    
+    for (const Keyframe& keyframe : curTransform.Keyframes()) {
+        Transform *t;
+        transformCache.Lookup(keyframe.t, &t, nullptr);
+        transformKeyframes.push_back(TransformKeyframe(t, keyframe.time));
+    }
+    
+    AnimatedTransform animatedInstanceToWorld(transformKeyframes);
+    
     std::shared_ptr<Primitive> prim(
         std::make_shared<TransformedPrimitive>(in[0], animatedInstanceToWorld));
     renderOptions->primitives.push_back(prim);
@@ -1393,22 +1406,29 @@ void pbrtWorldEnd() {
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("%*sWorldEnd\n", catIndentCount, "");
     } else {
-        std::unique_ptr<Integrator> integrator(renderOptions->MakeIntegrator());
-        std::unique_ptr<DifferentialRenderingScenePair> scenePair(renderOptions->MakeScene());
-
-        // This is kind of ugly; we directly override the current profiler
-        // state to switch from parsing/scene construction related stuff to
-        // rendering stuff and then switch it back below. The underlying
-        // issue is that all the rest of the profiling system assumes
-        // hierarchical inheritance of profiling state; this is the only
-        // place where that isn't the case.
-        CHECK_EQ(CurrentProfilerState(), ProfToBits(Prof::SceneConstruction));
-        ProfilerState = ProfToBits(Prof::IntegratorRender);
-
-        if (scenePair && integrator) integrator->Render(*scenePair);
-
-        CHECK_EQ(CurrentProfilerState(), ProfToBits(Prof::IntegratorRender));
-        ProfilerState = ProfToBits(Prof::SceneConstruction);
+        
+        for (size_t i = 0; i < renderOptions->frameCount; i += 1) {
+            Float frameStartTime = renderOptions->firstFrameTime + renderOptions->frameInterval * i;
+            std::unique_ptr<Integrator> integrator(renderOptions->MakeIntegrator(frameStartTime));
+            
+            Float frameEndTime = integrator->GetCamera().shutterClose;
+            std::unique_ptr<DifferentialRenderingScenePair> scenePair(renderOptions->MakeScene(frameStartTime, frameEndTime));
+            
+            // This is kind of ugly; we directly override the current profiler
+            // state to switch from parsing/scene construction related stuff to
+            // rendering stuff and then switch it back below. The underlying
+            // issue is that all the rest of the profiling system assumes
+            // hierarchical inheritance of profiling state; this is the only
+            // place where that isn't the case.
+            CHECK_EQ(CurrentProfilerState(), ProfToBits(Prof::SceneConstruction));
+            ProfilerState = ProfToBits(Prof::IntegratorRender);
+            
+            if (scenePair && integrator) integrator->Render(*scenePair);
+            
+            CHECK_EQ(CurrentProfilerState(), ProfToBits(Prof::IntegratorRender));
+            ProfilerState = ProfToBits(Prof::SceneConstruction);
+            
+        }
     }
 
     // Clean up after rendering. Do this before reporting stats so that
@@ -1430,17 +1450,16 @@ void pbrtWorldEnd() {
         }
     }
 
-    for (int i = 0; i < MaxTransforms; ++i) curTransform[i] = Transform();
-    activeTransformBits = AllTransformsBits;
+    curTransform = TransformSet();
     namedCoordinateSystems.erase(namedCoordinateSystems.begin(),
                                  namedCoordinateSystems.end());
 }
 
-DifferentialRenderingScenePair *RenderOptions::MakeScene() {
+DifferentialRenderingScenePair *RenderOptions::MakeScene(Float startTime, Float endTime) {
     std::shared_ptr<Primitive> accelerator =
-        MakeAccelerator(AcceleratorName, primitives, AcceleratorParams);
-    if (!accelerator) accelerator = std::make_shared<BVHAccel>(primitives);
-    Scene *scene = new Scene(accelerator, lights);
+        MakeAccelerator(AcceleratorName, primitives, startTime, endTime, AcceleratorParams);
+    if (!accelerator) accelerator = std::make_shared<BVHAccel>(primitives, startTime, endTime);
+    Scene *scene = new Scene(accelerator, startTime, endTime, lights);
     
     Scene *proxyScene = nullptr;
     if (this->haveProxyGeometry) {
@@ -1452,9 +1471,9 @@ DifferentialRenderingScenePair *RenderOptions::MakeScene() {
         }
         
         std::shared_ptr<Primitive> proxyAccelerator =
-        MakeAccelerator(AcceleratorName, proxyPrimitives, AcceleratorParams);
-        if (!proxyAccelerator) proxyAccelerator = std::make_shared<BVHAccel>(proxyPrimitives);
-        proxyScene = new Scene(proxyAccelerator, lights);
+        MakeAccelerator(AcceleratorName, proxyPrimitives, startTime, endTime, AcceleratorParams);
+        if (!proxyAccelerator) proxyAccelerator = std::make_shared<BVHAccel>(proxyPrimitives, startTime, endTime);
+        proxyScene = new Scene(proxyAccelerator, startTime, endTime, lights);
     }
     
     // Erase primitives and lights from _RenderOptions_
@@ -1464,8 +1483,8 @@ DifferentialRenderingScenePair *RenderOptions::MakeScene() {
     return new DifferentialRenderingScenePair(scene, proxyScene);
 }
 
-Integrator *RenderOptions::MakeIntegrator() const {
-    std::shared_ptr<const Camera> camera(MakeCamera());
+Integrator *RenderOptions::MakeIntegrator(Float startTime) const {
+    std::shared_ptr<const Camera> camera(MakeCamera(startTime));
     if (!camera) {
         Error("Unable to create camera");
         return nullptr;
@@ -1518,16 +1537,14 @@ Integrator *RenderOptions::MakeIntegrator() const {
     return integrator;
 }
 
-Camera *RenderOptions::MakeCamera() const {
+Camera *RenderOptions::MakeCamera(Float startTime) const {
     std::unique_ptr<Filter> filter = MakeFilter(FilterName, FilterParams);
     Film *film = MakeFilm(FilmName, FilmParams, std::move(filter));
     if (!film) {
         Error("Unable to create film.");
         return nullptr;
     }
-    Camera *camera = pbrt::MakeCamera(CameraName, CameraParams, CameraToWorld,
-                                  renderOptions->transformStartTime,
-                                  renderOptions->transformEndTime, film);
+    Camera *camera = pbrt::MakeCamera(CameraName, CameraParams, CameraToWorld, film, startTime);
     return camera;
 }
 

@@ -706,14 +706,9 @@ Float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const {
 
 RealisticCamera *CreateRealisticCamera(const ParamSet &params,
                                        const AnimatedTransform &cam2world,
-                                       Film *film, const Medium *medium) {
-    Float shutteropen = params.FindOneFloat("shutteropen", 0.f);
-    Float shutterclose = params.FindOneFloat("shutterclose", 1.f);
-    if (shutterclose < shutteropen) {
-        Warning("Shutter close time [%f] < shutter open [%f].  Swapping them.",
-                shutterclose, shutteropen);
-        std::swap(shutterclose, shutteropen);
-    }
+                                       Film *film, const Medium *medium,
+                                       Float shutterOpenTime) {
+    Float shuttertime = params.FindOneFloat("shuttertime", 1.f);
 
     // Realistic camera-specific parameters
     std::string lensFile = params.FindOneFilename("lensfile", "");
@@ -739,7 +734,7 @@ RealisticCamera *CreateRealisticCamera(const ParamSet &params,
         return nullptr;
     }
 
-    return new RealisticCamera(cam2world, shutteropen, shutterclose,
+    return new RealisticCamera(cam2world, shutterOpenTime, shutterOpenTime + shuttertime,
                                apertureDiameter, focusDistance, simpleWeighting,
                                lensData, film, medium);
 }

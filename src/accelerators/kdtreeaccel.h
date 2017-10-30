@@ -51,9 +51,13 @@ class KdTreeAccel : public Aggregate {
   public:
     // KdTreeAccel Public Methods
     KdTreeAccel(const std::vector<std::shared_ptr<Primitive>> &p,
+                Float startTime, Float endTime,
                 int isectCost = 80, int traversalCost = 1,
                 Float emptyBonus = 0.5, int maxPrims = 1, int maxDepth = -1);
-    Bounds3f WorldBound() const { return bounds; }
+    Bounds3f WorldBound(Float startTime, Float endTime) const {
+        DCHECK(startTime >= this->startTime && endTime <= this->endTime);
+        return bounds;
+    }
     ~KdTreeAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     bool IntersectP(const Ray &ray) const;
@@ -68,6 +72,7 @@ class KdTreeAccel : public Aggregate {
                    int *prims1, int badRefines = 0);
 
     // KdTreeAccel Private Data
+    const Float startTime, endTime;
     const int isectCost, traversalCost, maxPrims;
     const Float emptyBonus;
     std::vector<std::shared_ptr<Primitive>> primitives;
@@ -84,7 +89,7 @@ struct KdToDo {
 };
 
 std::shared_ptr<KdTreeAccel> CreateKdTreeAccelerator(
-    const std::vector<std::shared_ptr<Primitive>> &prims, const ParamSet &ps);
+    const std::vector<std::shared_ptr<Primitive>> &prims, Float startTime, Float endTime, const ParamSet &ps);
 
 }  // namespace pbrt
 

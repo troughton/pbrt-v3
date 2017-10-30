@@ -50,10 +50,11 @@ class Scene {
   public:
     // Scene Public Methods
     Scene(std::shared_ptr<Primitive> aggregate,
+          Float startTime, Float endTime,
           const std::vector<std::shared_ptr<Light>> &lights)
-        : lights(lights), aggregate(aggregate) {
+        : lights(lights), startTime(startTime), endTime(endTime), aggregate(aggregate) {
         // Scene Constructor Implementation
-        worldBound = aggregate->WorldBound();
+        worldBound = aggregate->WorldBound(startTime, endTime);
         for (const auto &light : lights) {
             light->Preprocess(*this);
             if (light->flags & (int)LightFlags::Infinite)
@@ -71,7 +72,8 @@ class Scene {
     // Store infinite light sources separately for cases where we only want
     // to loop over them.
     std::vector<std::shared_ptr<Light>> infiniteLights;
-
+    const Float startTime, endTime;
+    
   private:
     // Scene Private Data
     std::shared_ptr<Primitive> aggregate;

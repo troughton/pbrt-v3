@@ -201,7 +201,7 @@ class Transform {
   private:
     // Transform Private Data
     Matrix4x4 m, mInv;
-    friend class AnimatedTransform;
+    friend class TransformKeyframe;
     friend struct Quaternion;
 };
 
@@ -408,34 +408,58 @@ inline Ray Transform::operator()(const Ray &r, const Vector3f &oErrorIn,
     return Ray(o, d, tMax, r.time, r.medium);
 }
 
+// TransformKeyframe Declarations
+class TransformKeyframe {
+    public:
+        // TransformKeyframe Public Methods
+    TransformKeyframe(const Transform *transform, Float time) : transform(transform), time(time) {
+        TransformKeyframe::Decompose(transform->m, &T, &R, &S);
+    }
+        static void Decompose(const Matrix4x4 &m, Vector3f *T, Quaternion *R,
+                          Matrix4x4 *S);
+    
+        void Interpolate(Float time, Transform *t) const;
+        Ray operator()(const Ray &r) const;
+        RayDifferential operator()(const RayDifferential &r) const;
+        bool HasScale() const {
+            return transform->HasScale();
+        }
+        
+    private:
+        // TransformKeyframe Private Data
+        const Transform *transform;
+        const Float time;
+        Vector3f T;
+        Quaternion R;
+        Matrix4x4 S;
+    
+    friend class AnimatedTransform;
+    };
+    
 // AnimatedTransform Declarations
 class AnimatedTransform {
   public:
     // AnimatedTransform Public Methods
-    AnimatedTransform(const Transform *startTransform, Float startTime,
-                      const Transform *endTransform, Float endTime);
-    static void Decompose(const Matrix4x4 &m, Vector3f *T, Quaternion *R,
-                          Matrix4x4 *S);
+    AnimatedTransform(const std::vector<TransformKeyframe>& keyframes);
     void Interpolate(Float time, Transform *t) const;
     Ray operator()(const Ray &r) const;
     RayDifferential operator()(const RayDifferential &r) const;
     Point3f operator()(Float time, const Point3f &p) const;
     Vector3f operator()(Float time, const Vector3f &v) const;
     bool HasScale() const {
-        return startTransform->HasScale() || endTransform->HasScale();
+        return this->hasScale;
     }
-    Bounds3f MotionBounds(const Bounds3f &b) const;
-    Bounds3f BoundPointMotion(const Point3f &p) const;
+    Bounds3f MotionBounds(const Bounds3f &b, Float startTime, Float endTime) const;
+    Bounds3f BoundPointMotion(const Point3f &p, Float startTime, Float endTime) const;
 
   private:
     // AnimatedTransform Private Data
-    const Transform *startTransform, *endTransform;
-    const Float startTime, endTime;
+    std::vector<TransformKeyframe> keyframes;
+    
     const bool actuallyAnimated;
-    Vector3f T[2];
-    Quaternion R[2];
-    Matrix4x4 S[2];
     bool hasRotation;
+    bool hasScale;
+    
     struct DerivativeTerm {
         DerivativeTerm() {}
         DerivativeTerm(Float c, Float x, Float y, Float z)
@@ -445,7 +469,10 @@ class AnimatedTransform {
             return kc + kx * p.x + ky * p.y + kz * p.z;
         }
     };
-    DerivativeTerm c1[3], c2[3], c3[3], c4[3], c5[3];
+    struct DerivativeTerms {
+        DerivativeTerm c1[3], c2[3], c3[3], c4[3], c5[3];
+    };
+    std::vector<DerivativeTerms> derivativeTerms; // of size keyframes.size() - 1.
 };
 
 }  // namespace pbrt

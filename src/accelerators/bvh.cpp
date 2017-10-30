@@ -181,8 +181,10 @@ static void RadixSort(std::vector<MortonPrimitive> *v) {
 
 // BVHAccel Method Definitions
 BVHAccel::BVHAccel(const std::vector<std::shared_ptr<Primitive>> &p,
+                   Float startTime, Float endTime,
                    int maxPrimsInNode, SplitMethod splitMethod)
-    : maxPrimsInNode(std::min(255, maxPrimsInNode)),
+    : startTime(startTime), endTime(endTime),
+      maxPrimsInNode(std::min(255, maxPrimsInNode)),
       splitMethod(splitMethod),
       primitives(p) {
     ProfilePhase _(Prof::AccelConstruction);
@@ -194,7 +196,7 @@ BVHAccel::BVHAccel(const std::vector<std::shared_ptr<Primitive>> &p,
     // Initialize _primitiveInfo_ array for primitives
     std::vector<BVHPrimitiveInfo> primitiveInfo(primitives.size());
     for (size_t i = 0; i < primitives.size(); ++i) {
-        primitiveInfo[i] = {i, primitives[i]->WorldBound()};
+        primitiveInfo[i] = {i, primitives[i]->WorldBound(startTime, endTime)};
         isProxy = isProxy && primitives[i]->IsProxy();
     }
 
@@ -225,7 +227,8 @@ BVHAccel::BVHAccel(const std::vector<std::shared_ptr<Primitive>> &p,
     CHECK_EQ(totalNodes, offset);
 }
 
-Bounds3f BVHAccel::WorldBound() const {
+Bounds3f BVHAccel::WorldBound(Float startTime, Float endTime) const {
+    DCHECK(startTime >= this->startTime && endTime <= this->endTime);
     return nodes ? nodes[0].bounds : Bounds3f();
 }
     
@@ -743,7 +746,7 @@ bool BVHAccel::IntersectP(const Ray &ray) const {
 }
 
 std::shared_ptr<BVHAccel> CreateBVHAccelerator(
-    const std::vector<std::shared_ptr<Primitive>> &prims, const ParamSet &ps) {
+    const std::vector<std::shared_ptr<Primitive>> &prims, Float startTime, Float endTime, const ParamSet &ps) {
     std::string splitMethodName = ps.FindOneString("splitmethod", "sah");
     BVHAccel::SplitMethod splitMethod;
     if (splitMethodName == "sah")
@@ -761,7 +764,7 @@ std::shared_ptr<BVHAccel> CreateBVHAccelerator(
     }
 
     int maxPrimsInNode = ps.FindOneInt("maxnodeprims", 4);
-    return std::make_shared<BVHAccel>(prims, maxPrimsInNode, splitMethod);
+    return std::make_shared<BVHAccel>(prims, startTime, endTime, maxPrimsInNode, splitMethod);
 }
 
 }  // namespace pbrt

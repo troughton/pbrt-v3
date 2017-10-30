@@ -62,6 +62,8 @@ class Integrator {
     // Integrator Interface
     virtual ~Integrator();
     virtual void Render(const DifferentialRenderingScenePair &scene) = 0;
+    
+    virtual const Camera& GetCamera() const = 0;
 };
 
 Spectrum UniformSampleAllLights(const Interaction &it, const Scene &scene,
@@ -103,6 +105,10 @@ class SamplerIntegrator : public Integrator {
                               const Scene &scene, Sampler &sampler,
                               MemoryArena &arena, int depth) const;
 
+    inline const Camera& GetCamera() const {
+        return *this->camera;
+    }
+    
   protected:
     // SamplerIntegrator Protected Data
     std::shared_ptr<const Camera> camera;

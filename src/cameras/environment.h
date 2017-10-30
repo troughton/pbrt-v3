@@ -56,7 +56,8 @@ class EnvironmentCamera : public Camera {
 
 EnvironmentCamera *CreateEnvironmentCamera(const ParamSet &params,
                                            const AnimatedTransform &cam2world,
-                                           Film *film, const Medium *medium);
+                                           Film *film, const Medium *medium,
+                                           Float shutterOpenTime);
 
 }  // namespace pbrt
 

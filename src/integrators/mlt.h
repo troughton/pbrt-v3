@@ -123,6 +123,10 @@ class MLTIntegrator : public Integrator {
                const std::unordered_map<const Light *, size_t> &lightToIndex,
                MLTSampler &sampler, int k, Point2f *pRaster);
 
+    inline const Camera& GetCamera() const {
+        return *this->camera;
+    }
+    
   private:
     // MLTIntegrator Private Data
     std::shared_ptr<const Camera> camera;

@@ -51,7 +51,7 @@ class Primitive {
   public:
     // Primitive Interface
     virtual ~Primitive();
-    virtual Bounds3f WorldBound() const = 0;
+    virtual Bounds3f WorldBound(Float startTime, Float endTime) const = 0;
     virtual bool Intersect(const Ray &r, SurfaceInteraction *) const = 0;
     virtual bool IntersectP(const Ray &r) const = 0;
     virtual bool IsProxy() const = 0;
@@ -67,7 +67,7 @@ class Primitive {
 class GeometricPrimitive : public Primitive {
   public:
     // GeometricPrimitive Public Methods
-    virtual Bounds3f WorldBound() const;
+    virtual Bounds3f WorldBound(Float startTime, Float endTime) const;
     virtual bool Intersect(const Ray &r, SurfaceInteraction *isect) const;
     virtual bool IntersectP(const Ray &r) const;
     GeometricPrimitive(const std::shared_ptr<Shape> &shape,
@@ -115,8 +115,8 @@ class TransformedPrimitive : public Primitive {
             "TransformedPrimitive::ComputeScatteringFunctions() shouldn't be "
             "called";
     }
-    Bounds3f WorldBound() const {
-        return PrimitiveToWorld.MotionBounds(primitive->WorldBound());
+    Bounds3f WorldBound(Float startTime, Float endTime) const {
+        return PrimitiveToWorld.MotionBounds(primitive->WorldBound(startTime, endTime), startTime, endTime);
     }
 
   private:

@@ -59,9 +59,10 @@ class BVHAccel : public Aggregate {
 
     // BVHAccel Public Methods
     BVHAccel(const std::vector<std::shared_ptr<Primitive>> &p,
+             Float startTime, Float endTime,
              int maxPrimsInNode = 1,
              SplitMethod splitMethod = SplitMethod::SAH);
-    Bounds3f WorldBound() const;
+    Bounds3f WorldBound(Float startTime, Float endTime) const;
     ~BVHAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     bool IntersectP(const Ray &ray) const;
@@ -89,6 +90,7 @@ class BVHAccel : public Aggregate {
     int flattenBVHTree(BVHBuildNode *node, int *offset);
 
     // BVHAccel Private Data
+    const Float startTime, endTime;
     const int maxPrimsInNode;
     const SplitMethod splitMethod;
     std::vector<std::shared_ptr<Primitive>> primitives;
@@ -97,7 +99,7 @@ class BVHAccel : public Aggregate {
 };
 
 std::shared_ptr<BVHAccel> CreateBVHAccelerator(
-    const std::vector<std::shared_ptr<Primitive>> &prims, const ParamSet &ps);
+    const std::vector<std::shared_ptr<Primitive>> &prims, Float startTime, Float endTime, const ParamSet &ps);
 
 }  // namespace pbrt
 

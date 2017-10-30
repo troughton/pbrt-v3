@@ -120,15 +120,11 @@ Float OrthographicCamera::GenerateRayDifferential(const CameraSample &sample,
 
 OrthographicCamera *CreateOrthographicCamera(const ParamSet &params,
                                              const AnimatedTransform &cam2world,
-                                             Film *film, const Medium *medium) {
+                                             Film *film, const Medium *medium,
+                                             Float shutterOpenTime) {
     // Extract common camera parameters from _ParamSet_
-    Float shutteropen = params.FindOneFloat("shutteropen", 0.f);
-    Float shutterclose = params.FindOneFloat("shutterclose", 1.f);
-    if (shutterclose < shutteropen) {
-        Warning("Shutter close time [%f] < shutter open [%f].  Swapping them.",
-                shutterclose, shutteropen);
-        std::swap(shutterclose, shutteropen);
-    }
+    Float shuttertime = params.FindOneFloat("shuttertime", 1.f);
+    
     Float lensradius = params.FindOneFloat("lensradius", 0.f);
     Float focaldistance = params.FindOneFloat("focaldistance", 1e6f);
     Float frame = params.FindOneFloat(
@@ -157,7 +153,7 @@ OrthographicCamera *CreateOrthographicCamera(const ParamSet &params,
         } else
             Error("\"screenwindow\" should have four values");
     }
-    return new OrthographicCamera(cam2world, screen, shutteropen, shutterclose,
+    return new OrthographicCamera(cam2world, screen, shutterOpenTime, shutterOpenTime + shuttertime,
                                   lensradius, focaldistance, film, medium);
 }
 

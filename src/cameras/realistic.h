@@ -106,7 +106,8 @@ class RealisticCamera : public Camera {
 
 RealisticCamera *CreateRealisticCamera(const ParamSet &params,
                                        const AnimatedTransform &cam2world,
-                                       Film *film, const Medium *medium);
+                                       Film *film, const Medium *medium,
+                                       Float shutterOpenTime);
 
 }  // namespace pbrt
 

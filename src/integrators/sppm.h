@@ -62,6 +62,10 @@ class SPPMIntegrator : public Integrator {
                                   : camera->film->croppedPixelBounds.Area()),
           writeFrequency(writeFrequency) {}
     void Render(const DifferentialRenderingScenePair &scene);
+    
+    inline const Camera& GetCamera() const {
+        return *this->camera;
+    }
 
   private:
     // SPPMIntegrator Private Data

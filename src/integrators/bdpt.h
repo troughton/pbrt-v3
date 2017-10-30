@@ -140,6 +140,10 @@ class BDPTIntegrator : public Integrator {
           pixelBounds(pixelBounds),
           lightSampleStrategy(lightSampleStrategy) {}
     void Render(const DifferentialRenderingScenePair &scene);
+    
+    inline const Camera& GetCamera() const {
+        return *this->camera;
+    }
 
   private:
     // BDPTIntegrator Private Data
