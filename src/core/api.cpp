@@ -185,9 +185,9 @@ Options PbrtOptions;
     
 struct RenderOptions {
     // RenderOptions Public Methods
-    Integrator *MakeIntegrator(Float startTime) const;
+    Integrator *MakeIntegrator(Float startTime, const std::string& fileSuffix) const;
     DifferentialRenderingScenePair *MakeScene(Float startTime, Float endTime);
-    Camera *MakeCamera(Float startTime) const;
+    Camera *MakeCamera(Float startTime, const std::string& fileSuffix) const;
 
     // RenderOptions Public Data
     std::string FilterName = "box";
@@ -760,10 +760,10 @@ std::unique_ptr<Filter> MakeFilter(const std::string &name,
 }
 
 Film *MakeFilm(const std::string &name, const ParamSet &paramSet,
-               std::unique_ptr<Filter> filter) {
+               std::unique_ptr<Filter> filter, const std::string& fileSuffix) {
     Film *film = nullptr;
     if (name == "image")
-        film = CreateFilm(paramSet, std::move(filter));
+        film = CreateFilm(paramSet, std::move(filter), fileSuffix);
     else
         Warning("Film \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();
@@ -1408,8 +1408,14 @@ void pbrtWorldEnd() {
     } else {
         
         for (size_t i = 0; i < renderOptions->frameCount; i += 1) {
+            
+            std::string fileSuffix = "";
+            if (renderOptions->frameCount > 1) {
+                fileSuffix = "." + std::to_string(i + 1);
+            }
+            
             Float frameStartTime = renderOptions->firstFrameTime + renderOptions->frameInterval * i;
-            std::unique_ptr<Integrator> integrator(renderOptions->MakeIntegrator(frameStartTime));
+            std::unique_ptr<Integrator> integrator(renderOptions->MakeIntegrator(frameStartTime, fileSuffix));
             
             Float frameEndTime = integrator->GetCamera().shutterClose;
             std::unique_ptr<DifferentialRenderingScenePair> scenePair(renderOptions->MakeScene(frameStartTime, frameEndTime));
@@ -1483,8 +1489,8 @@ DifferentialRenderingScenePair *RenderOptions::MakeScene(Float startTime, Float 
     return new DifferentialRenderingScenePair(scene, proxyScene);
 }
 
-Integrator *RenderOptions::MakeIntegrator(Float startTime) const {
-    std::shared_ptr<const Camera> camera(MakeCamera(startTime));
+    Integrator *RenderOptions::MakeIntegrator(Float startTime, const std::string& fileSuffix) const {
+    std::shared_ptr<const Camera> camera(MakeCamera(startTime, fileSuffix));
     if (!camera) {
         Error("Unable to create camera");
         return nullptr;
@@ -1537,9 +1543,9 @@ Integrator *RenderOptions::MakeIntegrator(Float startTime) const {
     return integrator;
 }
 
-Camera *RenderOptions::MakeCamera(Float startTime) const {
+Camera *RenderOptions::MakeCamera(Float startTime, const std::string& fileSuffix) const {
     std::unique_ptr<Filter> filter = MakeFilter(FilterName, FilterParams);
-    Film *film = MakeFilm(FilmName, FilmParams, std::move(filter));
+    Film *film = MakeFilm(FilmName, FilmParams, std::move(filter), fileSuffix);
     if (!film) {
         Error("Unable to create film.");
         return nullptr;
