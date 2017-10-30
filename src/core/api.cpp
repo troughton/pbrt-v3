@@ -799,6 +799,12 @@ void pbrtCleanup() {
     renderOptions.reset(nullptr);
     CleanupProfiler();
 }
+    
+    void pbrtImageSequence(size_t frameCount, Float firstFrame, Float frameInterval) {
+        renderOptions->frameCount = frameCount;
+        renderOptions->firstFrameTime = firstFrame;
+        renderOptions->frameInterval = frameInterval;
+    }
 
 void pbrtIdentity() {
     VERIFY_INITIALIZED("Identity");

@@ -140,6 +140,7 @@ EndTime                 { return ENDTIME; }
 EndAnimationKeyframes   { return ENDANIMATIONKEYFRAMES; }
 Film                    { return FILM; }
 Identity                { return IDENTITY; }
+ImageSequence           { return IMAGESEQUENCE; }
 Include                 { return INCLUDE; }
 Keyframe                { return KEYFRAME; }
 LightSource             { return LIGHTSOURCE; }
