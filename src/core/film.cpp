@@ -209,7 +209,7 @@ namespace pbrt {
             backgroundImage = ImageTexture<RGBSpectrum, Spectrum>::GetTexture(backgroundFilename, false, 8.0, ImageWrap::Black, backgroundScale, gammaCorrect);
         }
         
-        const Float expectedWeight = samplesPerPixel;
+        const Float expectedWeight = samplesPerPixel * 0.5;
         
         int offset = 0;
         for (Point2i p : croppedPixelBounds) {
@@ -250,7 +250,7 @@ namespace pbrt {
                         Float proxyRGB[3];
                         XYZToRGB(proxyPixel.xyz, proxyRGB);
                         
-                        Float invWt = (Float)weight / proxyPixel.filterWeightSum;
+                        Float invWt = weight / proxyPixel.filterWeightSum;
                         
                         for (int i = 0; i < 3; i += 1) {
                             rgb[3 * offset + i] += proxyRGB[i] * invWt;
