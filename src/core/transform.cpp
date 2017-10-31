@@ -1237,12 +1237,39 @@ Vector3f AnimatedTransform::operator()(Float time, const Vector3f &v) const {
 
 Bounds3f AnimatedTransform::MotionBounds(const Bounds3f &b, Float startTime, Float endTime) const {
     if (!actuallyAnimated) return (*keyframes.front().transform)(b);
-    if (hasRotation == false)
-        return Union((*keyframes.front().transform)(b), (*keyframes.back().transform)(b));
-    // Return motion bounds accounting for animated rotation
-    Bounds3f bounds;
-    for (int corner = 0; corner < 8; ++corner)
-        bounds = Union(bounds, BoundPointMotion(b.Corner(corner), startTime, endTime));
+    
+    auto beginKeyframeIt = std::lower_bound(keyframes.begin(), keyframes.end(), startTime, [](const TransformKeyframe &lhs, Float rhs) {
+        return lhs.time < rhs;
+    });
+    
+    if (beginKeyframeIt != keyframes.begin()) {
+        beginKeyframeIt--;
+    }
+    
+    auto endKeyframeIt = std::lower_bound(keyframes.begin(), keyframes.end(), endTime, [](const TransformKeyframe &lhs, Float rhs) {
+        return lhs.time < rhs;
+    });
+    
+    if (endKeyframeIt == keyframes.end()) {
+        endKeyframeIt--;
+    }
+    
+    Bounds3f bounds((*keyframes.front().transform)(b));
+    
+    while (beginKeyframeIt < endKeyframeIt) {
+        auto secondKeyframeIt = beginKeyframeIt + 1;
+        
+        if (hasRotation == false)
+            bounds = Union((*beginKeyframeIt->transform)(b), (*secondKeyframeIt->transform)(b));
+        // Return motion bounds accounting for animated rotation
+        Bounds3f bounds;
+        for (int corner = 0; corner < 8; ++corner)
+            bounds = Union(bounds, BoundPointMotion(b.Corner(corner), startTime, endTime));
+        
+        beginKeyframeIt++;
+    }
+    
+    
     return bounds;
 }
 

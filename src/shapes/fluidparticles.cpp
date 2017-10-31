@@ -315,6 +315,8 @@ namespace pbrt {
         while (beginKeyframeIt < endKeyframeIt) {
             auto secondKeyframeIt = beginKeyframeIt + 1;
             bounds = Union(bounds, Bounds3f(primitiveBound.pMin + secondKeyframeIt->position, primitiveBound.pMax + secondKeyframeIt->position));
+            
+            beginKeyframeIt++;
         }
         return bounds;
     }

@@ -75,7 +75,10 @@ private:
     mutable Float bvhStartTime = Infinity, bvhEndTime = Infinity;
 };
     
-    std::shared_ptr<FluidContainer> CreateFluidContainer(int nParticles, int newParticlesPerFrame, float *positions, Float radius,
+    std::shared_ptr<FluidContainer> CreateFluidContainer(const std::shared_ptr<Material> &material,
+                                                         const MediumInterface &mediumInterface,
+                                                         const bool isProxy,
+                                                         int nParticles, int newParticlesPerFrame, float *positions, Float radius,
                                                          int nFrames, Float startFrame, Float frameStep
                                                          );
 }
