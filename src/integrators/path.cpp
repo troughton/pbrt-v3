@@ -116,7 +116,9 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
         
         if (!isect.bsdf) {
             VLOG(2) << "Skipping intersection due to null bsdf";
+            int insideFluidParticleCount = ray.insideFluidParticleCount;
             ray = isect.SpawnRay(ray.d);
+            ray.insideFluidParticleCount = insideFluidParticleCount;
             bounces--;
             continue;
         }
@@ -156,7 +158,9 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
             // medium.
             etaScale *= (Dot(wo, isect.n) > 0) ? (eta * eta) : 1 / (eta * eta);
         }
-        ray = isect.SpawnRay(wi);
+        int insideFluidParticleCount = ray.insideFluidParticleCount;
+        ray = isect.SpawnRay(ray.d);
+        ray.insideFluidParticleCount = insideFluidParticleCount;
 
         // Account for subsurface scattering, if applicable
         if (isect.bssrdf && (flags & BSDF_TRANSMISSION)) {
@@ -179,7 +183,10 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
             beta *= f * AbsDot(wi, pi.shading.n) / pdf;
             DCHECK(!std::isinf(beta.y()));
             specularBounce = (flags & BSDF_SPECULAR) != 0;
+            
+            int insideFluidParticleCount = ray.insideFluidParticleCount;
             ray = pi.SpawnRay(wi);
+            ray.insideFluidParticleCount = insideFluidParticleCount;
         }
 
         // Possibly terminate the path with Russian roulette.

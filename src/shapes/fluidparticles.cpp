@@ -79,6 +79,19 @@ namespace pbrt {
         // Compute sphere hit position and $\phi$
         pHit = ray((Float)tShapeHit);
         
+        // Check to make sure this is a valid intersection given the number of fluid particles encountered.
+    
+        if (Dot(Vector3f(pHit), r.d) > 0) {
+            // We're leaving the particle.
+            
+            r.insideFluidParticleCount -= 1;
+            
+        } else {
+            // We're entering the particle.
+            r.insideFluidParticleCount += 1;
+        }
+        
+        
         // Refine sphere intersection point
         pHit *= radius / Distance(pHit, Point3f(0, 0, 0));
         if (pHit.x == 0 && pHit.y == 0) pHit.x = 1e-5f * radius;
@@ -338,6 +351,7 @@ namespace pbrt {
         if (!primitive->Intersect(ray, isect)) return false;
         
         r.tMax = ray.tMax;
+        r.insideFluidParticleCount = ray.insideFluidParticleCount;
         
         isect->p += positionOffset;
         
@@ -369,7 +383,24 @@ namespace pbrt {
     
     bool FluidContainer::Intersect(const Ray &r,
                                        SurfaceInteraction *isect) const {
-        return this->frameBVH->Intersect(r, isect);
+        Ray ray = r;
+        int inputInsideFluidParticleCount = ray.insideFluidParticleCount;
+        
+        if (this->frameBVH->Intersect(ray, isect)) {
+            if (inputInsideFluidParticleCount != 0) {
+                while (r.insideFluidParticleCount != 0) {
+                    ray.o = ray(ray.tMax + MachineEpsilon);
+                    ray.tMax = Infinity;
+                    DCHECK(this->frameBVH->Intersect(ray, isect));
+                }
+            }
+            
+            r.tMax = ray.tMax;
+            r.insideFluidParticleCount = ray.insideFluidParticleCount;
+            
+        }
+        
+        return intersected;
     }
     
     bool FluidContainer::IsProxy() const {

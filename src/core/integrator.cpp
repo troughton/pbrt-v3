@@ -371,6 +371,7 @@ Spectrum SamplerIntegrator::SpecularReflect(
     if (pdf > 0.f && !f.IsBlack() && AbsDot(wi, ns) != 0.f) {
         // Compute ray differential _rd_ for specular reflection
         RayDifferential rd = isect.SpawnRay(wi);
+        rd.insideFluidParticleCount = ray.insideFluidParticleCount;
         if (ray.hasDifferentials) {
             rd.hasDifferentials = true;
             rd.rxOrigin = isect.p + isect.dpdx;
@@ -411,6 +412,7 @@ Spectrum SamplerIntegrator::SpecularTransmit(
     if (pdf > 0.f && !f.IsBlack() && AbsDot(wi, ns) != 0.f) {
         // Compute ray differential _rd_ for specular transmission
         RayDifferential rd = isect.SpawnRay(wi);
+        rd.insideFluidParticleCount = ray.insideFluidParticleCount;
         if (ray.hasDifferentials) {
             rd.hasDifferentials = true;
             rd.rxOrigin = p + isect.dpdx;

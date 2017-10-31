@@ -73,6 +73,7 @@ bool TransformedPrimitive::Intersect(const Ray &r,
     Ray ray = Inverse(InterpolatedPrimToWorld)(r);
     if (!primitive->Intersect(ray, isect)) return false;
     r.tMax = ray.tMax;
+    r.insideFluidParticleCount = ray.insideFluidParticleCount;
     // Transform instance's intersection data to world space
     if (!InterpolatedPrimToWorld.IsIdentity())
         *isect = InterpolatedPrimToWorld(*isect);
