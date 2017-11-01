@@ -84,7 +84,6 @@ Spectrum DirectLightingIntegrator::Li(const RayDifferential &ray,
     firstIntersectionType = isect.primitive->IsProxy() ? FirstIntersectionType::ProxyGeometry : FirstIntersectionType::SceneGeometry;
     
     if (!isect.bsdf) {
-        bool hitProxy = false;
         return Li(isect.SpawnRay(ray.d), scene, sampler, arena, firstIntersectionType, depth);
     }
     

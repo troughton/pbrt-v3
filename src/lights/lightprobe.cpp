@@ -45,7 +45,7 @@ namespace pbrt {
                            const Bounds3f proxyVolume,
                            int nSamples,
                            const std::string &texmap)
-    : Light((int)LightFlags::Infinite, LightToWorld, MediumInterface(),
+    : Light((int)LightFlags::Probe, LightToWorld, MediumInterface(),
             nSamples), proxyVolume(proxyVolume), worldSpacePosition(LightToWorld(Point3f())) {
         // Read texel data from _texmap_ and initialize _Lmap_
         Point2i resolution;
@@ -85,7 +85,7 @@ namespace pbrt {
         distribution.reset(new Distribution2D(img.get(), width, height));
         
         if (!Inside(this->worldSpacePosition, proxyVolume)) {
-            Error("Light probe must be inside proxy volume.");
+            Error("Light probe position (%.2f, %.2f, %.2f) must be inside proxy volume.", this->worldSpacePosition.x, this->worldSpacePosition.y, this->worldSpacePosition.z);
         }
     }
     
@@ -97,17 +97,16 @@ namespace pbrt {
     
     Spectrum LightProbe::Le(const RayDifferential &ray) const {
         Float t0, t1;
-        if (this->proxyVolume.IntersectP(ray, &t0, &t1)) {
-            Point3f proxyVolumeHit = ray(t0);
-            Vector3f parallaxCorrectedSampleRayWorldSpace = proxyVolumeHit - this->worldSpacePosition;
-            
-            Vector3f w = Normalize(WorldToLight(parallaxCorrectedSampleRayWorldSpace));
-            Point2f st(SphericalPhi(w) * Inv2Pi, SphericalTheta(w) * InvPi);
-            return Spectrum(Lmap->Lookup(st), SpectrumType::Illuminant);
-        } else {
-            Error("No hit with proxy volume found. Light probe must be place within proxy volume.");
-            exit(-1);
+        if (!this->proxyVolume.IntersectP(ray, &t0, &t1)) {
+            Error("Proxy volume intersection failed for light probe.");
         }
+        Float t = t0 > 0 ? t0 : t1;
+        Point3f proxyVolumeHit = ray(t);
+        Vector3f parallaxCorrectedSampleRayWorldSpace = proxyVolumeHit - this->worldSpacePosition;
+        
+        Vector3f w = Normalize(WorldToLight(parallaxCorrectedSampleRayWorldSpace));
+        Point2f st(SphericalPhi(w) * Inv2Pi, SphericalTheta(w) * InvPi);
+        return Spectrum(Lmap->Lookup(st), SpectrumType::Illuminant);
     }
     
     Spectrum LightProbe::Sample_Li(const Interaction &ref, const Point2f &u,

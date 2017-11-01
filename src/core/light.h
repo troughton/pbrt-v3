@@ -50,7 +50,8 @@ enum class LightFlags : int {
     DeltaPosition = 1,
     DeltaDirection = 2,
     Area = 4,
-    Infinite = 8
+    Infinite = 8,
+    Probe = 16
 };
 
 inline bool IsDeltaLight(int flags) {

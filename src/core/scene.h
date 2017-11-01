@@ -57,6 +57,8 @@ class Scene {
         worldBound = aggregate->WorldBound(startTime, endTime);
         for (const auto &light : lights) {
             light->Preprocess(*this);
+            if (light->flags & (int)LightFlags::Probe)
+                lightProbes.push_back(light);
             if (light->flags & (int)LightFlags::Infinite)
                 infiniteLights.push_back(light);
         }
@@ -71,6 +73,7 @@ class Scene {
     std::vector<std::shared_ptr<Light>> lights;
     // Store infinite light sources separately for cases where we only want
     // to loop over them.
+    std::vector<std::shared_ptr<Light>> lightProbes;
     std::vector<std::shared_ptr<Light>> infiniteLights;
     const Float startTime, endTime;
     

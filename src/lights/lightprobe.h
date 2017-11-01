@@ -67,13 +67,14 @@ class LightProbe : public Light {
     void Pdf_Le(const Ray &, const Normal3f &, Float *pdfPos,
                 Float *pdfDir) const;
 
+    const Bounds3f proxyVolume;
+
   private:
     // LightProbe Private Data
     std::unique_ptr<MIPMap<RGBSpectrum>> Lmap;
     Point3f worldCenter;
     Float worldRadius;
     std::unique_ptr<Distribution2D> distribution;
-    Bounds3f proxyVolume;
     Point3f worldSpacePosition;
 };
 

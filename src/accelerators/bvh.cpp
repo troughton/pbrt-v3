@@ -228,7 +228,6 @@ BVHAccel::BVHAccel(const std::vector<std::shared_ptr<Primitive>> &p,
 }
 
 Bounds3f BVHAccel::WorldBound(Float startTime, Float endTime) const {
-    DCHECK(startTime >= this->startTime && endTime <= this->endTime);
     return nodes ? nodes[0].bounds : Bounds3f();
 }
     

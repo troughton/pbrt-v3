@@ -32,6 +32,7 @@
 
 // integrators/path.cpp*
 #include "integrators/path.h"
+#include "lights/lightprobe.h"
 #include "bssrdf.h"
 #include "camera.h"
 #include "film.h"
@@ -95,8 +96,21 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
                 L += beta * isect.Le(-ray.d);
                 VLOG(2) << "Added Le -> L = " << L;
             } else {
-                for (const auto &light : scene.infiniteLights)
-                    L += beta * light->Le(ray);
+                
+                bool foundProxy = false;
+                
+                for (const auto &light : scene.lightProbes) {
+                    const LightProbe *probe = dynamic_cast<const LightProbe*>(light.get());
+                    if (Inside(ray.o, probe->proxyVolume)) {
+                        L += beta * light->Le(ray);
+                        foundProxy = true;
+                    }
+                }
+                
+                if (!foundProxy) {
+                    for (const auto &light : scene.infiniteLights)
+                        L += beta * light->Le(ray);
+                }
                 VLOG(2) << "Added infinite area lights -> L = " << L;
                 if (bounces == 0 && !L.IsBlack()) {
                     firstIntersectionType = FirstIntersectionType::InfiniteAreaLight;
