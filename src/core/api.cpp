@@ -64,6 +64,7 @@
 #include "lights/distant.h"
 #include "lights/goniometric.h"
 #include "lights/infinite.h"
+#include "lights/lightprobe.h"
 #include "lights/point.h"
 #include "lights/projection.h"
 #include "lights/spot.h"
@@ -616,6 +617,8 @@ std::shared_ptr<Light> MakeLight(const std::string &name,
         light = CreateDistantLight(light2world, paramSet);
     else if (name == "infinite" || name == "exinfinite")
         light = CreateInfiniteLight(light2world, paramSet);
+    else if (name == "lightprobe")
+        light = CreateLightProbe(light2world, paramSet);
     else
         Warning("Light \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();
