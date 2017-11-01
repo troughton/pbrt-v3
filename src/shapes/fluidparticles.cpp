@@ -391,16 +391,19 @@ namespace pbrt {
                 while (r.insideFluidParticleCount != 0) {
                     ray.o = ray(ray.tMax + MachineEpsilon);
                     ray.tMax = Infinity;
-                    DCHECK(this->frameBVH->Intersect(ray, isect));
+                    if (!this->frameBVH->Intersect(ray, isect)) {
+                        break;
+                    }
                 }
             }
             
             r.tMax = ray.tMax;
             r.insideFluidParticleCount = ray.insideFluidParticleCount;
             
+            return true;
         }
         
-        return intersected;
+        return false;
     }
     
     bool FluidContainer::IsProxy() const {
@@ -411,7 +414,8 @@ namespace pbrt {
     std::shared_ptr<FluidContainer> CreateFluidContainer(const std::shared_ptr<Material> &material,
                                                          const MediumInterface &mediumInterface,
                                                          const bool isProxy,
-                                                         int nParticles, int newParticlesPerFrame, float *positions, Float radius,
+                                                         int nParticles, int newParticlesPerFrame,
+                                                         float *positions, Float radius,
                                                          int nFrames, Float startFrame, Float frameStep
                                                          ) {
     std::shared_ptr<Shape> sphere = std::make_shared<SimpleSphere>(radius);
@@ -428,6 +432,7 @@ namespace pbrt {
     
     for (int frame = 0; frame < nFrames; frame += 1) {
         numParticles += newParticlesPerFrame;
+        numParticles = std::min(numParticles, nParticles);
         
         Float frameTime = startFrame + frame * frameStep;
         
