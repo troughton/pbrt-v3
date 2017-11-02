@@ -448,9 +448,9 @@ pbrt_stmt: ACCELERATOR STRING paramlist
     pbrt::pbrtIdentity();
 }
 
-| IMAGESEQUENCE NUM NUM NUM
+| IMAGESEQUENCE NUM NUM NUM NUM
 {
-    pbrt::pbrtImageSequence($2, $3, $4);
+    pbrt::pbrtImageSequence($2, $3, $4, $5);
 }
 
 

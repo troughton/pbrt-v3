@@ -117,6 +117,8 @@
 #include "media/grid.h"
 #include "media/homogeneous.h"
 #include <map>
+#include <sstream>
+#include <iomanip>
 #include <stdio.h>
 
 namespace pbrt {
@@ -213,6 +215,7 @@ struct RenderOptions {
     bool haveScatteringMedia = false;
     bool haveProxyGeometry = false;
     
+    int startFrame = 0;
     size_t frameCount = 1;
     Float firstFrameTime = 0.0;
     Float frameInterval = 1.0 / 24.0;
@@ -804,11 +807,12 @@ void pbrtCleanup() {
     CleanupProfiler();
 }
     
-    void pbrtImageSequence(size_t frameCount, Float firstFrame, Float frameInterval) {
-        renderOptions->frameCount = frameCount;
-        renderOptions->firstFrameTime = firstFrame;
-        renderOptions->frameInterval = frameInterval;
-    }
+void pbrtImageSequence(int startFrame, size_t frameCount, Float firstFrameTime, Float frameInterval) {
+    renderOptions->startFrame = startFrame;
+    renderOptions->frameCount = frameCount;
+    renderOptions->firstFrameTime = firstFrameTime;
+    renderOptions->frameInterval = frameInterval;
+}
 
 void pbrtIdentity() {
     VERIFY_INITIALIZED("Identity");
@@ -1461,11 +1465,16 @@ void pbrtWorldEnd() {
         printf("%*sWorldEnd\n", catIndentCount, "");
     } else {
         
-        for (size_t i = 0; i < renderOptions->frameCount; i += 1) {
+        for (int i = 0; i < renderOptions->frameCount; i += 1) {
             
             std::string fileSuffix = "";
-            if (renderOptions->frameCount > 1) {
-                fileSuffix = "." + std::to_string(i + 1);
+            if (renderOptions->frameCount > 1 || renderOptions->startFrame != 0) {
+                int frameNum = renderOptions->startFrame + i;
+                
+                std::stringstream ss;
+                ss << "." << std::setw(4) << std::setfill('0') << frameNum;
+                
+                fileSuffix = ss.str();
             }
             
             Float frameStartTime = renderOptions->firstFrameTime + renderOptions->frameInterval * i;

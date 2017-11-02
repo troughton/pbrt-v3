@@ -46,7 +46,7 @@ namespace pbrt {
 // API Function Declarations
 void pbrtInit(const Options &opt);
 void pbrtCleanup();
-void pbrtImageSequence(size_t frameCount, Float firstFrame, Float frameInterval);
+void pbrtImageSequence(int startFrame, size_t frameCount, Float firstFrameTime, Float frameInterval);
 void pbrtIdentity();
 void pbrtTranslate(Float dx, Float dy, Float dz);
 void pbrtRotate(Float angle, Float ax, Float ay, Float az);
