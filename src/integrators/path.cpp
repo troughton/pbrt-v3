@@ -176,7 +176,7 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
             etaScale *= (Dot(wo, isect.n) > 0) ? (eta * eta) : 1 / (eta * eta);
         }
         int insideFluidParticleCount = ray.insideFluidParticleCount;
-        ray = isect.SpawnRay(ray.d);
+        ray = isect.SpawnRay(wi);
         ray.insideFluidParticleCount = insideFluidParticleCount;
 
         // Account for subsurface scattering, if applicable
