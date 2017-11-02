@@ -1489,6 +1489,10 @@ void pbrtWorldEnd() {
             ProfilerState = ProfToBits(Prof::SceneConstruction);
             
         }
+        
+        // Erase primitives and lights from _RenderOptions_
+        renderOptions->primitives.erase(renderOptions->primitives.begin(), renderOptions->primitives.end());
+        renderOptions->lights.erase(renderOptions->lights.begin(), renderOptions->lights.end());
     }
 
     // Clean up after rendering. Do this before reporting stats so that
@@ -1535,10 +1539,6 @@ DifferentialRenderingScenePair *RenderOptions::MakeScene(Float startTime, Float 
         if (!proxyAccelerator) proxyAccelerator = std::make_shared<BVHAccel>(proxyPrimitives, startTime, endTime);
         proxyScene = new Scene(proxyAccelerator, lights, startTime, endTime, /* isProxy = */ true);
     }
-    
-    // Erase primitives and lights from _RenderOptions_
-    primitives.erase(primitives.begin(), primitives.end());
-    lights.erase(lights.begin(), lights.end());
     
     return new DifferentialRenderingScenePair(scene, proxyScene);
 }

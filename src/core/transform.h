@@ -260,7 +260,9 @@ inline Ray Transform::operator()(const Ray &r) const {
         o += d * dt;
         tMax -= dt;
     }
-    return Ray(o, d, tMax, r.time, r.medium);
+    Ray result(o, d, tMax, r.time, r.medium);
+    result.insideFluidParticleCount = r.insideFluidParticleCount;
+    return result;
 }
 
 inline RayDifferential Transform::operator()(const RayDifferential &r) const {
@@ -271,6 +273,7 @@ inline RayDifferential Transform::operator()(const RayDifferential &r) const {
     ret.ryOrigin = (*this)(r.ryOrigin);
     ret.rxDirection = (*this)(r.rxDirection);
     ret.ryDirection = (*this)(r.ryDirection);
+    ret.insideFluidParticleCount = r.insideFluidParticleCount;
     return ret;
 }
 
@@ -390,7 +393,9 @@ inline Ray Transform::operator()(const Ray &r, Vector3f *oError,
         o += d * dt;
         //        tMax -= dt;
     }
-    return Ray(o, d, tMax, r.time, r.medium);
+    Ray result(o, d, tMax, r.time, r.medium);
+    result.insideFluidParticleCount = r.insideFluidParticleCount;
+    return result;
 }
 
 inline Ray Transform::operator()(const Ray &r, const Vector3f &oErrorIn,
@@ -405,7 +410,9 @@ inline Ray Transform::operator()(const Ray &r, const Vector3f &oErrorIn,
         o += d * dt;
         //        tMax -= dt;
     }
-    return Ray(o, d, tMax, r.time, r.medium);
+    Ray result(o, d, tMax, r.time, r.medium);
+    result.insideFluidParticleCount = r.insideFluidParticleCount;
+    return result;
 }
 
 // TransformKeyframe Declarations

@@ -302,8 +302,8 @@ namespace pbrt {
         }
         if (filename == "") filename = "pbrt.exr";
         
-        if (!fileSuffix.empty()) {
-            size_t dotLocation = fileSuffix.find_last_of(".");
+        if (!filename.empty()) {
+            size_t dotLocation = filename.find_last_of(".");
             filename.insert(dotLocation, fileSuffix);
         }
         

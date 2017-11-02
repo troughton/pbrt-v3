@@ -85,14 +85,19 @@ namespace pbrt {
         
         if (Dot(Vector3f(pHit), r.d) > 0) {
             // We're leaving the particle.
-            
             r.insideFluidParticleCount -= 1;
+            
+            if (r.insideFluidParticleCount != 0) {
+                return false;
+            }
             
         } else {
             // We're entering the particle.
             r.insideFluidParticleCount += 1;
+            if (r.insideFluidParticleCount != 1) {
+                return false;
+            }
         }
-        
         
         // Refine sphere intersection point
         pHit *= radius / Distance(pHit, Point3f(0, 0, 0));
@@ -364,7 +369,6 @@ namespace pbrt {
         return true;
     }
     
-    
     /// FluidContainer
     
     Bounds3f FluidContainer::WorldBound(Float startTime, Float endTime) const {
@@ -377,8 +381,7 @@ namespace pbrt {
             
             std::vector<std::shared_ptr<Primitive>> validPrimitives(primitives.begin(), primitivesEnd);
             
-            ParamSet paramSet;
-            this->frameBVH = CreateBVHAccelerator(validPrimitives, startTime, endTime, paramSet);
+            this->frameBVH = std::make_shared<BVHAccel>(validPrimitives, startTime, endTime, 4, BVHAccel::SplitMethod::SAH);
             this->bvhStartTime = startTime;
             this->bvhEndTime = endTime;
         }
@@ -392,22 +395,12 @@ namespace pbrt {
     bool FluidContainer::Intersect(const Ray &r,
                                    SurfaceInteraction *isect) const {
         Ray ray = r;
-        int inputInsideFluidParticleCount = ray.insideFluidParticleCount;
+        
+        int startingCount = r.insideFluidParticleCount;
         
         if (this->frameBVH->Intersect(ray, isect)) {
-            if (inputInsideFluidParticleCount != 0) {
-                while (r.insideFluidParticleCount != 0) {
-                    ray.o = ray(ray.tMax + MachineEpsilon);
-                    ray.tMax = Infinity;
-                    if (!this->frameBVH->Intersect(ray, isect)) {
-                        break;
-                    }
-                }
-            }
-            
             r.tMax = ray.tMax;
             r.insideFluidParticleCount = ray.insideFluidParticleCount;
-            
             return true;
         }
         
@@ -446,13 +439,15 @@ namespace pbrt {
         std::ifstream input( positionsFile, std::ios::binary );
         
         std::vector<char> positionsBuffer((
-                                  std::istreambuf_iterator<char>(input)),
-                                 (std::istreambuf_iterator<char>()));
+                                           std::istreambuf_iterator<char>(input)),
+                                          (std::istreambuf_iterator<char>()));
         float *positions = (float*)positionsBuffer.data();
         
         std::vector<std::shared_ptr<Primitive>> particlePrims;
         
-        for (int i = 0; i < nParticles; i += 1) {
+        const int particleStride = 6; // render every sixth particle.
+        
+        for (int i = 0; i < nParticles / particleStride; i += 1) {
             particlePrims.push_back(std::make_shared<MovingPrimitive>(spherePrim));
         }
         
@@ -464,12 +459,12 @@ namespace pbrt {
             
             Float frameTime = startFrame + frame * frameStep;
             
-            for (int i = 0; i < numParticles; i += 1) {
+            for (int i = 0; i < numParticles / particleStride; i += 1) {
                 MovingPrimitive* prim = (MovingPrimitive*)particlePrims[i].get();
                 
                 Point3f position((Float)positions[0], (Float)positions[1], (Float)positions[2]);
                 prim->keyframes.push_back(PositionKeyframe(position, frameTime));
-                positions += 3;
+                positions += 3 * particleStride;
             }
         }
         
