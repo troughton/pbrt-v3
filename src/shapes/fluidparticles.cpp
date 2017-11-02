@@ -441,7 +441,6 @@ namespace pbrt {
         std::vector<char> positionsBuffer((
                                            std::istreambuf_iterator<char>(input)),
                                           (std::istreambuf_iterator<char>()));
-        float *positions = (float*)positionsBuffer.data();
         
         std::vector<std::shared_ptr<Primitive>> particlePrims;
         
@@ -454,8 +453,12 @@ namespace pbrt {
         int numParticles = 0;
         
         for (int frame = 0; frame < nFrames; frame += 1) {
+            
+            float *positions = (float*)positionsBuffer.data() + numParticles * 3;
+            
             numParticles += newParticlesPerFrame;
             numParticles = std::min(numParticles, nParticles);
+    
             
             Float frameTime = startFrame + frame * frameStep;
             
