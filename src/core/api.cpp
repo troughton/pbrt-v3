@@ -1284,10 +1284,11 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
         transformCache.Lookup(Transform(), &identity, nullptr);
         
         // Create _GeometricPrimitive_(s) for animated shape
-        std::shared_ptr<Material> mtl = graphicsState.CreateMaterial(params);
         MediumInterface mi = graphicsState.CreateMediumInterface();
         
-        std::shared_ptr<Primitive> container = CreateFluidContainer(mtl, mi, graphicsState.proxyGeometry, params);
+        std::shared_ptr<Primitive> container = CreateFluidContainer([](const ParamSet& params) {
+            return graphicsState.CreateMaterial(params);
+        }, mi, graphicsState.proxyGeometry, params);
         params.ReportUnused();
         
         renderOptions->haveProxyGeometry = renderOptions->haveProxyGeometry || graphicsState.proxyGeometry;

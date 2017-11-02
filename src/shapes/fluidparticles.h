@@ -75,7 +75,7 @@ private:
     mutable Float bvhStartTime = Infinity, bvhEndTime = Infinity;
 };
     
-    std::shared_ptr<FluidContainer> CreateFluidContainer(const std::shared_ptr<Material> &material,
+    std::shared_ptr<FluidContainer> CreateFluidContainer(const std::function<std::shared_ptr<Material>(const ParamSet&)>& materialCreationLambda,
                                                          const MediumInterface &mediumInterface,
                                                          const bool isProxy,
                                                          const ParamSet &params

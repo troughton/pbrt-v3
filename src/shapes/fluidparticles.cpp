@@ -419,7 +419,7 @@ namespace pbrt {
     }
     
     
-    std::shared_ptr<FluidContainer> CreateFluidContainer(const std::shared_ptr<Material> &material,
+    std::shared_ptr<FluidContainer> CreateFluidContainer(const std::function<std::shared_ptr<Material>(const ParamSet&)>& materialCreationLambda,
                                                          const MediumInterface &mediumInterface,
                                                          const bool isProxy,
                                                          const ParamSet &params
@@ -438,8 +438,7 @@ namespace pbrt {
             exit(-1);
         }
         
-        
-        
+        const std::shared_ptr<Material> material = materialCreationLambda(params);
         
         std::shared_ptr<Shape> sphere = std::make_shared<SimpleSphere>(radius);
         std::shared_ptr<Primitive> spherePrim = std::make_shared<GeometricPrimitive>(sphere, material, nullptr, mediumInterface, isProxy);

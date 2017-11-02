@@ -139,6 +139,7 @@ CoordSysTransform       { return COORDSYSTRANSFORM; }
 EndTime                 { return ENDTIME; }
 EndAnimationKeyframes   { return ENDANIMATIONKEYFRAMES; }
 Film                    { return FILM; }
+FluidContainer          { return FLUIDCONTAINER; }
 Identity                { return IDENTITY; }
 ImageSequence           { return IMAGESEQUENCE; }
 Include                 { return INCLUDE; }
