@@ -371,8 +371,14 @@ namespace pbrt {
         if (startTime != this->bvhStartTime || endTime != this->bvhEndTime) {
             // Construct the frame BVH
             
+            auto primitivesEnd = std::lower_bound(this->primitives.begin(), this->primitives.end(), startTime, [](std::shared_ptr<Primitive> prim, Float endTime) -> bool {
+                return ((MovingPrimitive*)prim.get())->keyframes.front().time < endTime;
+            });
+            
+            std::vector<std::shared_ptr<Primitive>> validPrimitives(primitives.begin(), primitivesEnd);
+            
             ParamSet paramSet;
-            this->frameBVH = CreateBVHAccelerator(this->primitives, startTime, endTime, paramSet);
+            this->frameBVH = CreateBVHAccelerator(validPrimitives, startTime, endTime, paramSet);
             this->bvhStartTime = startTime;
             this->bvhEndTime = endTime;
         }
