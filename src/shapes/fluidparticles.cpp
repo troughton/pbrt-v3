@@ -5,7 +5,9 @@
 //  Created by Thomas Roughton on 31/10/17.
 //
 
-#include "shapes/fluidparticles.hpp"
+#include <fstream>
+#include <iterator>
+#include "shapes/fluidparticles.h"
 #include "shapes/sphere.h"
 #include "accelerators/bvh.h"
 #include "stats.h"
@@ -14,7 +16,7 @@
 #include "paramset.h"
 
 namespace pbrt {
-
+    
     const Transform identityTransform;
     
     // Sphere Declarations
@@ -47,7 +49,7 @@ namespace pbrt {
     }
     
     bool SimpleSphere::Intersect(const Ray &r, Float *tHit, SurfaceInteraction *isect,
-                           bool testAlphaTexture) const {
+                                 bool testAlphaTexture) const {
         ProfilePhase p(Prof::ShapeIntersect);
         Float phi;
         Point3f pHit;
@@ -80,7 +82,7 @@ namespace pbrt {
         pHit = ray((Float)tShapeHit);
         
         // Check to make sure this is a valid intersection given the number of fluid particles encountered.
-    
+        
         if (Dot(Vector3f(pHit), r.d) > 0) {
             // We're leaving the particle.
             
@@ -145,8 +147,8 @@ namespace pbrt {
         
         // Initialize _SurfaceInteraction_ from parametric information
         *isect = SurfaceInteraction(pHit, pError, Point2f(u, v),
-                                                     -ray.d, dpdu, dpdv, dndu, dndv,
-                                                     ray.time, this);
+                                    -ray.d, dpdu, dpdv, dndu, dndv,
+                                    ray.time, this);
         
         // Update _tHit_ for quadric intersection
         *tHit = (Float)tShapeHit;
@@ -179,7 +181,7 @@ namespace pbrt {
             tShapeHit = t1;
             if (tShapeHit.UpperBound() > ray.tMax) return false;
         }
-
+        
         return true;
     }
     
@@ -198,7 +200,7 @@ namespace pbrt {
     }
     
     Interaction SimpleSphere::Sample(const Interaction &ref, const Point2f &u,
-                               Float *pdf) const {
+                                     Float *pdf) const {
         Point3f pCenter = Point3f(0, 0, 0);
         
         // Sample uniformly on sphere if $\pt{}$ is inside it
@@ -334,6 +336,10 @@ namespace pbrt {
         return bounds;
     }
     
+    bool MovingPrimitive::IsProxy() const {
+        return primitive->IsProxy();
+    }
+    
     bool MovingPrimitive::IntersectP(const Ray &r) const {
         Point3f positionOffset = this->Interpolate(r.time);
         Ray ray = r;
@@ -342,7 +348,7 @@ namespace pbrt {
     }
     
     bool MovingPrimitive::Intersect(const Ray &r,
-                                       SurfaceInteraction *isect) const {
+                                    SurfaceInteraction *isect) const {
         
         Point3f positionOffset = this->Interpolate(r.time);
         Ray ray = r;
@@ -356,10 +362,6 @@ namespace pbrt {
         isect->p += positionOffset;
         
         return true;
-    }
-    
-    bool GeometricPrimitive::IsProxy() const {
-        return this->isProxy;
     }
     
     
@@ -382,7 +384,7 @@ namespace pbrt {
     }
     
     bool FluidContainer::Intersect(const Ray &r,
-                                       SurfaceInteraction *isect) const {
+                                   SurfaceInteraction *isect) const {
         Ray ray = r;
         int inputInsideFluidParticleCount = ray.insideFluidParticleCount;
         
@@ -414,37 +416,58 @@ namespace pbrt {
     std::shared_ptr<FluidContainer> CreateFluidContainer(const std::shared_ptr<Material> &material,
                                                          const MediumInterface &mediumInterface,
                                                          const bool isProxy,
-                                                         int nParticles, int newParticlesPerFrame,
-                                                         float *positions, Float radius,
-                                                         int nFrames, Float startFrame, Float frameStep
+                                                         const ParamSet &params
                                                          ) {
-    std::shared_ptr<Shape> sphere = std::make_shared<SimpleSphere>(radius);
-    std::shared_ptr<Primitive> spherePrim = std::make_shared<GeometricPrimitive>(sphere, material, nullptr, mediumInterface, isProxy);
         
+        int nParticles = params.FindOneInt("particlecount", 0);
+        int newParticlesPerFrame = params.FindOneInt("newparticlesperframe", 0);
+        Float radius = params.FindOneFloat("particleradius", 0.05);
+        std::string positionsFile = params.FindOneFilename("positionsfile", "");
+        int nFrames = params.FindOneInt("framecount", 0);
+        Float startFrame = params.FindOneFloat("starttime", 0);
+        Float frameStep = params.FindOneFloat("framestep", 1.0);
         
-    std::vector<std::shared_ptr<Primitive>> particlePrims;
-    
-    for (int i = 0; i < nParticles; i += 1) {
-        particlePrims.push_back(std::make_shared<MovingPrimitive>(spherePrim));
-    }
-    
-    int numParticles = 0;
-    
-    for (int frame = 0; frame < nFrames; frame += 1) {
-        numParticles += newParticlesPerFrame;
-        numParticles = std::min(numParticles, nParticles);
-        
-        Float frameTime = startFrame + frame * frameStep;
-        
-        for (int i = 0; i < numParticles; i += 1) {
-            MovingPrimitive* prim = (MovingPrimitive*)particlePrims[i].get();
-            
-            Point3f position((Float)positions[0], (Float)positions[1], (Float)positions[2]);
-            prim->keyframes.push_back(PositionKeyframe(position, frameTime));
-            positions += 3;
+        if (positionsFile.empty()) {
+            Error("No data file specified for fluid container.");
+            exit(-1);
         }
+        
+        
+        
+        
+        std::shared_ptr<Shape> sphere = std::make_shared<SimpleSphere>(radius);
+        std::shared_ptr<Primitive> spherePrim = std::make_shared<GeometricPrimitive>(sphere, material, nullptr, mediumInterface, isProxy);
+        
+        std::ifstream input( positionsFile, std::ios::binary );
+        
+        std::vector<char> positionsBuffer((
+                                  std::istreambuf_iterator<char>(input)),
+                                 (std::istreambuf_iterator<char>()));
+        float *positions = (float*)positionsBuffer.data();
+        
+        std::vector<std::shared_ptr<Primitive>> particlePrims;
+        
+        for (int i = 0; i < nParticles; i += 1) {
+            particlePrims.push_back(std::make_shared<MovingPrimitive>(spherePrim));
+        }
+        
+        int numParticles = 0;
+        
+        for (int frame = 0; frame < nFrames; frame += 1) {
+            numParticles += newParticlesPerFrame;
+            numParticles = std::min(numParticles, nParticles);
+            
+            Float frameTime = startFrame + frame * frameStep;
+            
+            for (int i = 0; i < numParticles; i += 1) {
+                MovingPrimitive* prim = (MovingPrimitive*)particlePrims[i].get();
+                
+                Point3f position((Float)positions[0], (Float)positions[1], (Float)positions[2]);
+                prim->keyframes.push_back(PositionKeyframe(position, frameTime));
+                positions += 3;
+            }
+        }
+        
+        return std::make_shared<FluidContainer>(particlePrims);
     }
-    
-    return std::make_shared<FluidContainer>(particlePrims);
-}
 }

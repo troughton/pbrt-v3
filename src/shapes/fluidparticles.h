@@ -78,9 +78,7 @@ private:
     std::shared_ptr<FluidContainer> CreateFluidContainer(const std::shared_ptr<Material> &material,
                                                          const MediumInterface &mediumInterface,
                                                          const bool isProxy,
-                                                         int nParticles, int newParticlesPerFrame, int particleLimit,
-                                                         float *positions, Float radius,
-                                                         int nFrames, Float startFrame, Float frameStep
+                                                         const ParamSet &params
                                                          );
 }
 

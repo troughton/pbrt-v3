@@ -100,6 +100,7 @@
 #include "shapes/sphere.h"
 #include "shapes/triangle.h"
 #include "shapes/plymesh.h"
+#include "shapes/fluidparticles.h"
 #include "textures/bilerp.h"
 #include "textures/checkerboard.h"
 #include "textures/constant.h"
@@ -1270,6 +1271,49 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
                                          areaLights.begin(), areaLights.end());
     }
 }
+
+    void pbrtFluidContainer(const ParamSet &params) {
+            // Initialize _prims_ and _areaLights_ for animated shape
+            
+        // Create initial shape or shapes for animated shape
+        if (graphicsState.areaLight != "")
+            Warning(
+                    "Ignoring currently set area light when creating "
+                    "animated shape");
+        Transform *identity;
+        transformCache.Lookup(Transform(), &identity, nullptr);
+        
+        // Create _GeometricPrimitive_(s) for animated shape
+        std::shared_ptr<Material> mtl = graphicsState.CreateMaterial(params);
+        MediumInterface mi = graphicsState.CreateMediumInterface();
+        
+        std::shared_ptr<Primitive> container = CreateFluidContainer(mtl, mi, graphicsState.proxyGeometry, params);
+        params.ReportUnused();
+        
+        renderOptions->haveProxyGeometry = renderOptions->haveProxyGeometry || graphicsState.proxyGeometry;
+        // Create single _TransformedPrimitive_ for _prims_
+        
+        std::vector<TransformKeyframe> transformKeyframes;
+        
+        for (const Keyframe& keyframe : curTransform.Keyframes()) {
+            Transform *t;
+            transformCache.Lookup(keyframe.t, &t, nullptr);
+            transformKeyframes.push_back(TransformKeyframe(t, keyframe.time));
+        }
+        
+        AnimatedTransform animatedObjectToWorld(transformKeyframes);
+        
+        std::shared_ptr<Primitive> prim = std::make_shared<TransformedPrimitive>(
+                                                          container, animatedObjectToWorld);
+
+        
+        // Add _prims_ and _areaLights_ to scene or current instance
+        if (renderOptions->currentInstance) {
+            renderOptions->currentInstance->push_back(prim);
+        } else {
+            renderOptions->primitives.push_back(prim);
+        }
+    }
 
 std::shared_ptr<Material> GraphicsState::CreateMaterial(
     const ParamSet &params) {
