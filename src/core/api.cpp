@@ -1438,9 +1438,15 @@ void pbrtWorldEnd() {
 
 DifferentialRenderingScenePair *RenderOptions::MakeScene() {
     std::shared_ptr<Primitive> accelerator =
+<<<<<<< Updated upstream
         MakeAccelerator(AcceleratorName, primitives, AcceleratorParams);
     if (!accelerator) accelerator = std::make_shared<BVHAccel>(primitives);
     Scene *scene = new Scene(accelerator, lights);
+=======
+        MakeAccelerator(AcceleratorName, primitives, startTime, endTime, AcceleratorParams);
+    if (!accelerator) accelerator = std::make_shared<BVHAccel>(primitives, startTime, endTime);
+    Scene *scene = new Scene(accelerator, lights, startTime, endTime, /* isProxy = */ false);
+>>>>>>> Stashed changes
     
     Scene *proxyScene = nullptr;
     if (this->haveProxyGeometry) {
@@ -1452,9 +1458,15 @@ DifferentialRenderingScenePair *RenderOptions::MakeScene() {
         }
         
         std::shared_ptr<Primitive> proxyAccelerator =
+<<<<<<< Updated upstream
         MakeAccelerator(AcceleratorName, proxyPrimitives, AcceleratorParams);
         if (!proxyAccelerator) proxyAccelerator = std::make_shared<BVHAccel>(proxyPrimitives);
         proxyScene = new Scene(proxyAccelerator, lights);
+=======
+        MakeAccelerator(AcceleratorName, proxyPrimitives, startTime, endTime, AcceleratorParams);
+        if (!proxyAccelerator) proxyAccelerator = std::make_shared<BVHAccel>(proxyPrimitives, startTime, endTime);
+        proxyScene = new Scene(proxyAccelerator, lights, startTime, endTime, /* isProxy = */ true);
+>>>>>>> Stashed changes
     }
     
     // Erase primitives and lights from _RenderOptions_

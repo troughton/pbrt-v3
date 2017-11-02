@@ -56,9 +56,12 @@ PathIntegrator::PathIntegrator(int maxDepth,
       rrThreshold(rrThreshold),
       lightSampleStrategy(lightSampleStrategy) {}
 
-void PathIntegrator::Preprocess(const Scene &scene, Sampler &sampler) {
+void PathIntegrator::Preprocess(const DifferentialRenderingScenePair &scene, Sampler &sampler) {
     lightDistribution =
-        CreateLightSampleDistribution(lightSampleStrategy, scene);
+        CreateLightSampleDistribution(lightSampleStrategy, *scene.scene);
+    if (scene.proxyScene) {
+        proxyLightDistribution = CreateLightSampleDistribution(lightSampleStrategy, *scene.proxyScene);
+    }
 }
 
 Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
@@ -121,7 +124,7 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
             continue;
         }
 
-        const Distribution1D *distrib = lightDistribution->Lookup(isect.p);
+        const Distribution1D *distrib = (scene.isProxy ? proxyLightDistribution : lightDistribution)->Lookup(isect.p);
 
         // Sample illumination from lights to find path contribution.
         // (But skip this for perfectly specular BSDFs.)
@@ -170,7 +173,7 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
 
             // Account for the direct subsurface scattering component
             L += beta * UniformSampleOneLight(pi, scene, arena, sampler, false,
-                                              lightDistribution->Lookup(pi.p));
+                                              (scene.isProxy ? proxyLightDistribution : lightDistribution)->Lookup(pi.p));
 
             // Account for the indirect subsurface scattering component
             Spectrum f = pi.bsdf->Sample_f(pi.wo, &wi, sampler.Get2D(), &pdf,

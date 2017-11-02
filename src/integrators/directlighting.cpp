@@ -42,16 +42,16 @@
 namespace pbrt {
 
 // DirectLightingIntegrator Method Definitions
-void DirectLightingIntegrator::Preprocess(const Scene &scene,
+void DirectLightingIntegrator::Preprocess(const DifferentialRenderingScenePair &scene,
                                           Sampler &sampler) {
     if (strategy == LightStrategy::UniformSampleAll) {
         // Compute number of samples to use for each light
-        for (const auto &light : scene.lights)
+        for (const auto &light : scene.scene->lights)
             nLightSamples.push_back(sampler.RoundCount(light->nSamples));
 
         // Request samples for sampling all lights
         for (int i = 0; i < maxDepth; ++i) {
-            for (size_t j = 0; j < scene.lights.size(); ++j) {
+            for (size_t j = 0; j < scene.scene->lights.size(); ++j) {
                 sampler.Request2DArray(nLightSamples[j]);
                 sampler.Request2DArray(nLightSamples[j]);
             }

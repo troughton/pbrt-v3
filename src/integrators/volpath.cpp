@@ -47,9 +47,12 @@ STAT_COUNTER("Integrator/Volume interactions", volumeInteractions);
 STAT_COUNTER("Integrator/Surface interactions", surfaceInteractions);
 
 // VolPathIntegrator Method Definitions
-void VolPathIntegrator::Preprocess(const Scene &scene, Sampler &sampler) {
+void VolPathIntegrator::Preprocess(const DifferentialRenderingScenePair &scene, Sampler &sampler) {
     lightDistribution =
-        CreateLightSampleDistribution(lightSampleStrategy, scene);
+        CreateLightSampleDistribution(lightSampleStrategy, *scene.scene);
+    if (scene.proxyScene) {
+        proxyLightDistribution = CreateLightSampleDistribution(lightSampleStrategy, *scene.proxyScene);
+    }
 }
 
 Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
@@ -88,7 +91,7 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
             ++volumeInteractions;
             // Handle scattering at point in medium for volumetric path tracer
             const Distribution1D *lightDistrib =
-                lightDistribution->Lookup(mi.p);
+                (scene.isProxy ? proxyLightDistribution : lightDistribution)->Lookup(mi.p);
             L += beta * UniformSampleOneLight(mi, scene, arena, sampler, true,
                                               lightDistrib);
 
@@ -133,7 +136,7 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
             // Sample illumination from lights to find attenuated path
             // contribution
             const Distribution1D *lightDistrib =
-                lightDistribution->Lookup(isect.p);
+                (scene.isProxy ? proxyLightDistribution : lightDistribution)->Lookup(isect.p);
             L += beta * UniformSampleOneLight(isect, scene, arena, sampler,
                                               true, lightDistrib);
 
@@ -171,7 +174,7 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
                 // component
                 L += beta *
                      UniformSampleOneLight(pi, scene, arena, sampler, true,
-                                           lightDistribution->Lookup(pi.p));
+                                           (scene.isProxy ? proxyLightDistribution : lightDistribution)->Lookup(pi.p));
 
                 // Account for the indirect subsurface scattering component
                 Spectrum f = pi.bsdf->Sample_f(pi.wo, &wi, sampler.Get2D(),

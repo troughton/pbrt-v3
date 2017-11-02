@@ -54,7 +54,7 @@ class PathIntegrator : public SamplerIntegrator {
                    const Bounds2i &pixelBounds, Float rrThreshold = 1,
                    const std::string &lightSampleStrategy = "spatial");
 
-    void Preprocess(const Scene &scene, Sampler &sampler);
+    void Preprocess(const DifferentialRenderingScenePair &scene, Sampler &sampler);
     Spectrum Li(const RayDifferential &ray, const Scene &scene,
                 Sampler &sampler, MemoryArena &arena,
                 FirstIntersectionType& firstIntersectionType,
@@ -66,6 +66,7 @@ class PathIntegrator : public SamplerIntegrator {
     const Float rrThreshold;
     const std::string lightSampleStrategy;
     std::unique_ptr<LightDistribution> lightDistribution;
+    std::unique_ptr<LightDistribution> proxyLightDistribution;
 };
 
 PathIntegrator *CreatePathIntegrator(const ParamSet &params,
