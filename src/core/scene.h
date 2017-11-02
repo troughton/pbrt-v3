@@ -50,9 +50,10 @@ class Scene {
   public:
     // Scene Public Methods
     Scene(std::shared_ptr<Primitive> aggregate,
+          const std::vector<std::shared_ptr<Light>> &lights,
           Float startTime, Float endTime,
-          const std::vector<std::shared_ptr<Light>> &lights)
-        : lights(lights), startTime(startTime), endTime(endTime), aggregate(aggregate) {
+          bool isProxy)
+        : lights(lights), startTime(startTime), endTime(endTime), isProxy(isProxy), aggregate(aggregate) {
         // Scene Constructor Implementation
         worldBound = aggregate->WorldBound(startTime, endTime);
         for (const auto &light : lights) {
@@ -76,6 +77,7 @@ class Scene {
     std::vector<std::shared_ptr<Light>> lightProbes;
     std::vector<std::shared_ptr<Light>> infiniteLights;
     const Float startTime, endTime;
+    const bool isProxy;
     
   private:
     // Scene Private Data

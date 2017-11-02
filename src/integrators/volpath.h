@@ -57,7 +57,7 @@ class VolPathIntegrator : public SamplerIntegrator {
           maxDepth(maxDepth),
           rrThreshold(rrThreshold),
           lightSampleStrategy(lightSampleStrategy) { }
-    void Preprocess(const Scene &scene, Sampler &sampler);
+    void Preprocess(const DifferentialRenderingScenePair &scene, Sampler &sampler);
     Spectrum Li(const RayDifferential &ray, const Scene &scene,
                 Sampler &sampler, MemoryArena &arena,
                 FirstIntersectionType& firstIntersectionType,
@@ -69,6 +69,7 @@ class VolPathIntegrator : public SamplerIntegrator {
     const Float rrThreshold;
     const std::string lightSampleStrategy;
     std::unique_ptr<LightDistribution> lightDistribution;
+    std::unique_ptr<LightDistribution> proxyLightDistribution;
 };
 
 VolPathIntegrator *CreateVolPathIntegrator(

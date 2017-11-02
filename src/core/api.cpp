@@ -1518,7 +1518,7 @@ DifferentialRenderingScenePair *RenderOptions::MakeScene(Float startTime, Float 
     std::shared_ptr<Primitive> accelerator =
         MakeAccelerator(AcceleratorName, primitives, startTime, endTime, AcceleratorParams);
     if (!accelerator) accelerator = std::make_shared<BVHAccel>(primitives, startTime, endTime);
-    Scene *scene = new Scene(accelerator, startTime, endTime, lights);
+    Scene *scene = new Scene(accelerator, lights, startTime, endTime, /* isProxy = */ false);
     
     Scene *proxyScene = nullptr;
     if (this->haveProxyGeometry) {
@@ -1530,9 +1530,9 @@ DifferentialRenderingScenePair *RenderOptions::MakeScene(Float startTime, Float 
         }
         
         std::shared_ptr<Primitive> proxyAccelerator =
-        MakeAccelerator(AcceleratorName, proxyPrimitives, startTime, endTime, AcceleratorParams);
+            MakeAccelerator(AcceleratorName, proxyPrimitives, startTime, endTime, AcceleratorParams);
         if (!proxyAccelerator) proxyAccelerator = std::make_shared<BVHAccel>(proxyPrimitives, startTime, endTime);
-        proxyScene = new Scene(proxyAccelerator, startTime, endTime, lights);
+        proxyScene = new Scene(proxyAccelerator, lights, startTime, endTime, /* isProxy = */ true);
     }
     
     // Erase primitives and lights from _RenderOptions_

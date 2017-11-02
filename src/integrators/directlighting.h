@@ -63,7 +63,7 @@ class DirectLightingIntegrator : public SamplerIntegrator {
                 Sampler &sampler, MemoryArena &arena,
                 FirstIntersectionType& firstIntersectionType,
                 int depth) const;
-    void Preprocess(const Scene &scene, Sampler &sampler);
+    void Preprocess(const DifferentialRenderingScenePair &scene, Sampler &sampler);
 
   private:
     // DirectLightingIntegrator Private Data

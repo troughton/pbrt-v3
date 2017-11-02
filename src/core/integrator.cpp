@@ -226,7 +226,7 @@ std::unique_ptr<Distribution1D> ComputeLightPowerDistribution(
 
 // SamplerIntegrator Method Definitions
 void SamplerIntegrator::Render(const DifferentialRenderingScenePair &scene) {
-    Preprocess(*scene.scene, *sampler); // Preprocess only deals with lighting, which is the same between both the proxy-only and regular scenes.
+    Preprocess(scene, *sampler);
     
     // Render image tiles in parallel
 
