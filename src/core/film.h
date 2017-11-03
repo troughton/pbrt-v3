@@ -225,7 +225,7 @@ class FilmTile {
     friend class Film;
 };
 
-Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter, std::string fileSuffix);
+Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter, std::string fileSuffix, bool sceneHasProxyGeometry);
 
 }  // namespace pbrt
 
