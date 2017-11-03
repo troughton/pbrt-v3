@@ -421,7 +421,7 @@ void BDPTIntegrator::Render(const DifferentialRenderingScenePair &scenePair) {
                     }
                     VLOG(2) << "Add film sample pFilm: " << pFilm << ", L: " << L <<
                         ", (y: " << L.y() << ")";
-                    filmTile->AddSample(pFilm, L);
+                    filmTile->AddSample(pFilm, L, 0.f);
                     arena.Reset();
                 } while (tileSampler->StartNextSample());
             }

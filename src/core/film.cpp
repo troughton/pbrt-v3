@@ -85,6 +85,7 @@ namespace pbrt {
                 Point2f p;
                 p.x = (x + 0.5f) * filter->radius.x / filterTableWidth;
                 p.y = (y + 0.5f) * filter->radius.y / filterTableWidth;
+                
                 filterTable[offset] = filter->Evaluate(p);
             }
         }
@@ -130,8 +131,10 @@ namespace pbrt {
             
             {
                 ProxyPixel &pixel = GetProxyPixel(p);
-                for (int c = 0; c < 3; ++c)
-                    pixel.xyz[c] = 0;
+                for (int c = 0; c < 3; ++c) {
+                    pixel.xyzNumerator[c] = 0;
+                    pixel.xyzDenominator[c] = 0;
+                }
                 pixel.filterWeightSum = 0;
             }
         }
@@ -151,11 +154,15 @@ namespace pbrt {
             mergePixel.filterWeightSum += tilePixel.filterWeightSum;
             
             if (this->sceneHasProxyGeometry) {
-                const FilmTilePixel &tileProxyPixel = tile->GetProxyPixel(pixel);
+                const FilmTileProxyPixel &tileProxyPixel = tile->GetProxyPixel(pixel);
                 ProxyPixel &mergePixel = GetProxyPixel(pixel);
                 Float xyz[3];
-                tileProxyPixel.contribSum.ToXYZ(xyz);
-                for (int i = 0; i < 3; ++i) mergePixel.xyz[i] += xyz[i];
+                tileProxyPixel.numeratorSum.ToXYZ(xyz);
+                for (int i = 0; i < 3; ++i) mergePixel.xyzNumerator[i] += xyz[i];
+                
+                tileProxyPixel.denominatorSum.ToXYZ(xyz);
+                for (int i = 0; i < 3; ++i) mergePixel.xyzDenominator[i] += xyz[i];
+                
                 mergePixel.filterWeightSum += tileProxyPixel.filterWeightSum;
             }
         }
@@ -209,7 +216,7 @@ namespace pbrt {
             backgroundImage = ImageTexture<RGBSpectrum, Spectrum>::GetTexture(backgroundFilename, false, 8.0, ImageWrap::Black, backgroundScale, gammaCorrect);
         }
         
-        const Float expectedWeight = samplesPerPixel * 0.5;
+        const Float expectedWeight = samplesPerPixel * 0.5f;
         
         int offset = 0;
         for (Point2i p : croppedPixelBounds) {
@@ -235,10 +242,9 @@ namespace pbrt {
                 RGBSpectrum backgroundColour = backgroundImage->Lookup(st);
                 Float backgroundRGB[3];
                 backgroundColour.ToRGB(backgroundRGB);
-                const Float weight = 1 - alpha;
                 
                 for (int i = 0; i < 3; i += 1) {
-                    rgb[3 * offset + i] += backgroundRGB[i] * backgroundScale * weight;
+                    backgroundRGB[i] *= backgroundScale;
                 }
                 
                 if (this->sceneHasProxyGeometry) {
@@ -248,15 +254,27 @@ namespace pbrt {
                     if (proxyPixel.filterWeightSum != 0) {
                         
                         Float proxyRGB[3];
-                        XYZToRGB(proxyPixel.xyz, proxyRGB);
+                        XYZToRGB(proxyPixel.xyzNumerator, proxyRGB);
                         
-                        Float invWt = weight / proxyPixel.filterWeightSum;
+                        Float proxyRGBDenom[3];
+                        XYZToRGB(proxyPixel.xyzDenominator, proxyRGBDenom);
+                        
+//                        Float invWt = 1.0f / proxyPixel.filterWeightSum;
+                        Float proxyAlpha = Clamp(proxyPixel.filterWeightSum / expectedWeight, 0.f, 1.f);
                         
                         for (int i = 0; i < 3; i += 1) {
-                            rgb[3 * offset + i] += proxyRGB[i] * invWt;
+                            backgroundRGB[i] *= (1 - proxyAlpha) + proxyAlpha * proxyRGB[i] / (proxyRGBDenom[i] + MachineEpsilon);
+//                            backgroundRGB[i] += proxyAlpha * (proxyRGB[i] - proxyRGBDenom[i]) * invWt;
                         }
                         
                     }
+                }
+                
+                
+                const Float weight = 1 - alpha;
+                
+                for (int i = 0; i < 3; i += 1) {
+                    rgb[3 * offset + i] += backgroundRGB[i] * weight;
                 }
             }
             

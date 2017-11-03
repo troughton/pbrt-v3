@@ -53,6 +53,11 @@ struct FilmTilePixel {
     Spectrum contribSum = 0.f;
     Float filterWeightSum = 0.f;
 };
+struct FilmTileProxyPixel {
+    Spectrum numeratorSum = 0.f;
+    Spectrum denominatorSum = 0.f;
+    Float filterWeightSum = 0.f;
+};
 
 // Film Declarations
 class Film {
@@ -92,20 +97,23 @@ class Film {
         Float pad;
     };
     struct ProxyPixel {
-        ProxyPixel() { xyz[0] = xyz[1] = xyz[2] = filterWeightSum = 0; }
-        Float xyz[3];
+        ProxyPixel() { xyzNumerator[0] = xyzNumerator[1] = xyzNumerator[2] = xyzDenominator[0] = xyzDenominator[1] = xyzDenominator[2] = filterWeightSum = 0; }
+        Float xyzNumerator[3];
         Float filterWeightSum;
+        Float xyzDenominator[3];
+        Float pad;
     };
     std::unique_ptr<Pixel[]> pixels;
     std::unique_ptr<ProxyPixel[]> proxyPixels;
     static PBRT_CONSTEXPR int filterTableWidth = 16;
     Float filterTable[filterTableWidth * filterTableWidth];
+    
     std::mutex mutex;
     const Float scale;
     const Float backgroundScale;
     const Float maxSampleLuminance;
     const bool sceneHasProxyGeometry;
-
+    
     // Film Private Methods
     Pixel &GetPixel(const Point2i &p) {
         CHECK(InsideExclusive(p, croppedPixelBounds));
@@ -139,14 +147,19 @@ class FilmTile {
           maxSampleLuminance(maxSampleLuminance) {
               pixels = std::vector<FilmTilePixel>(std::max(0, pixelBounds.Area()));
               if (hasProxyGeometry) {
-                  proxyPixels = std::vector<FilmTilePixel>(std::max(0, pixelBounds.Area()));
+                  proxyPixels = std::vector<FilmTileProxyPixel>(std::max(0, pixelBounds.Area()));
               }
     }
-    void AddSample(const Point2f &pFilm, Spectrum L, bool proxySample = false,
+    void AddSample(const Point2f &pFilm, Spectrum L, Spectrum Ldenominator,
+                   bool proxySample = false,
                    Float sampleWeight = 1.) {
         ProfilePhase _(Prof::AddFilmSample);
         if (L.y() > maxSampleLuminance)
             L *= maxSampleLuminance / L.y();
+        
+        if (Ldenominator.y() > maxSampleLuminance)
+            Ldenominator *= maxSampleLuminance / Ldenominator.y();
+        
         // Compute sample's raster bounds
         Point2f pFilmDiscrete = pFilm - Vector2f(0.5f, 0.5f);
         Point2i p0 = (Point2i)Ceil(pFilmDiscrete - filterRadius);
@@ -176,10 +189,17 @@ class FilmTile {
                 int offset = ify[y - p0.y] * filterTableSize + ifx[x - p0.x];
                 Float filterWeight = filterTable[offset];
 
-                // Update pixel values with filtered sample contribution
-                FilmTilePixel &pixel = proxySample ? GetProxyPixel(Point2i(x, y)) : GetPixel(Point2i(x, y));
-                pixel.contribSum += L * sampleWeight * filterWeight;
-                pixel.filterWeightSum += filterWeight;
+                if (proxySample) {
+                    // Update pixel values with filtered sample contribution
+                    FilmTileProxyPixel &pixel = GetProxyPixel(Point2i(x, y));
+                    pixel.numeratorSum += L * sampleWeight * filterWeight;
+                    pixel.denominatorSum += Ldenominator * sampleWeight * filterWeight;
+                    pixel.filterWeightSum += filterWeight;
+                } else {
+                    FilmTilePixel &pixel = GetPixel(Point2i(x, y));
+                    pixel.contribSum += L * sampleWeight * filterWeight;
+                    pixel.filterWeightSum += filterWeight;
+                }
             }
         }
     }
@@ -197,14 +217,14 @@ class FilmTile {
             (p.x - pixelBounds.pMin.x) + (p.y - pixelBounds.pMin.y) * width;
         return pixels[offset];
     }
-    FilmTilePixel &GetProxyPixel(const Point2i &p) {
+    FilmTileProxyPixel &GetProxyPixel(const Point2i &p) {
         CHECK(InsideExclusive(p, pixelBounds));
         int width = pixelBounds.pMax.x - pixelBounds.pMin.x;
         int offset =
         (p.x - pixelBounds.pMin.x) + (p.y - pixelBounds.pMin.y) * width;
         return proxyPixels[offset];
     }
-    const FilmTilePixel &GetProxyPixel(const Point2i &p) const {
+    const FilmTileProxyPixel &GetProxyPixel(const Point2i &p) const {
         CHECK(InsideExclusive(p, pixelBounds));
         int width = pixelBounds.pMax.x - pixelBounds.pMin.x;
         int offset =
@@ -220,7 +240,7 @@ class FilmTile {
     const Float *filterTable;
     const int filterTableSize;
     std::vector<FilmTilePixel> pixels;
-    std::vector<FilmTilePixel> proxyPixels;
+    std::vector<FilmTileProxyPixel> proxyPixels;
     const Float maxSampleLuminance;
     friend class Film;
 };

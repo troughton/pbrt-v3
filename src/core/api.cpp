@@ -770,7 +770,7 @@ Film *MakeFilm(const std::string &name, const ParamSet &paramSet,
                std::unique_ptr<Filter> filter, const std::string& fileSuffix) {
     Film *film = nullptr;
     if (name == "image")
-        film = CreateFilm(paramSet, std::move(filter), fileSuffix);
+        film = CreateFilm(paramSet, std::move(filter), fileSuffix, renderOptions->haveProxyGeometry);
     else
         Warning("Film \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();
