@@ -129,8 +129,8 @@ class FilmTile {
     // FilmTile Public Methods
     FilmTile(const Bounds2i &pixelBounds, const Vector2f &filterRadius,
              const Float *filterTable, int filterTableSize,
-             Float maxSampleLuminance,
-             bool hasProxyGeometry)
+             bool hasProxyGeometry,
+             Float maxSampleLuminance)
         : pixelBounds(pixelBounds),
           filterRadius(filterRadius),
           invFilterRadius(1 / filterRadius.x, 1 / filterRadius.y),
@@ -225,7 +225,7 @@ class FilmTile {
     friend class Film;
 };
 
-Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter, std::string fileSuffix);
+Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter, std::string fileSuffix, bool sceneHasProxyGeometry);
 
 }  // namespace pbrt
 

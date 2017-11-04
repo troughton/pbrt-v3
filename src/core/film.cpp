@@ -286,7 +286,7 @@ namespace pbrt {
         pbrt::WriteImage(filename, &rgb[0], croppedPixelBounds, fullResolution);
     }
     
-    Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter, std::string fileSuffix) {
+    Film *CreateFilm(const ParamSet &params, std::unique_ptr<Filter> filter, std::string fileSuffix, bool sceneHasProxyGeometry) {
         // Intentionally use FindOneString() rather than FindOneFilename() here
         // so that the rendered image is left in the working directory, rather
         // than the directory the scene file lives in.
@@ -302,8 +302,8 @@ namespace pbrt {
         }
         if (filename == "") filename = "pbrt.exr";
         
-        if (!fileSuffix.empty()) {
-            size_t dotLocation = fileSuffix.find_last_of(".");
+        if (!filename.empty()) {
+            size_t dotLocation = filename.find_last_of(".");
             filename.insert(dotLocation, fileSuffix);
         }
         
@@ -333,6 +333,7 @@ namespace pbrt {
         return new Film(Point2i(xres, yres), crop, std::move(filter), diagonal,
                         filename, scale,
                         backgroundFilename, backgroundScale,
+                        sceneHasProxyGeometry,
                         maxSampleLuminance);
     }
     

@@ -118,6 +118,8 @@
 #include "media/grid.h"
 #include "media/homogeneous.h"
 #include <map>
+#include <sstream>
+#include <iomanip>
 #include <stdio.h>
 
 namespace pbrt {
@@ -215,6 +217,7 @@ struct RenderOptions {
     bool haveScatteringMedia = false;
     bool haveProxyGeometry = false;
     
+    int startFrame = 0;
     size_t frameCount = 1;
     Float firstFrameTime = 0.0;
     Float frameInterval = 1.0 / 24.0;
@@ -804,11 +807,12 @@ void pbrtCleanup() {
     CleanupProfiler();
 }
     
-    void pbrtImageSequence(size_t frameCount, Float firstFrame, Float frameInterval) {
-        renderOptions->frameCount = frameCount;
-        renderOptions->firstFrameTime = firstFrame;
-        renderOptions->frameInterval = frameInterval;
-    }
+void pbrtImageSequence(int startFrame, size_t frameCount, Float firstFrameTime, Float frameInterval) {
+    renderOptions->startFrame = startFrame;
+    renderOptions->frameCount = frameCount;
+    renderOptions->firstFrameTime = firstFrameTime;
+    renderOptions->frameInterval = frameInterval;
+}
 
 void pbrtIdentity() {
     VERIFY_INITIALIZED("Identity");
@@ -1298,10 +1302,11 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
         transformCache.Lookup(Transform(), &identity, nullptr);
         
         // Create _GeometricPrimitive_(s) for animated shape
-        std::shared_ptr<Material> mtl = graphicsState.CreateMaterial(params);
         MediumInterface mi = graphicsState.CreateMediumInterface();
         
-        std::shared_ptr<Primitive> container = CreateFluidContainer(mtl, mi, graphicsState.proxyGeometry, params);
+        std::shared_ptr<Primitive> container = CreateFluidContainer([](const ParamSet& params) {
+            return graphicsState.CreateMaterial(params);
+        }, mi, graphicsState.proxyGeometry, params);
         params.ReportUnused();
         
         renderOptions->haveProxyGeometry = renderOptions->haveProxyGeometry || graphicsState.proxyGeometry;
@@ -1477,11 +1482,16 @@ void pbrtWorldEnd() {
         printf("%*sWorldEnd\n", catIndentCount, "");
     } else {
         
-        for (size_t i = 0; i < renderOptions->frameCount; i += 1) {
+        for (int i = 0; i < renderOptions->frameCount; i += 1) {
             
             std::string fileSuffix = "";
-            if (renderOptions->frameCount > 1) {
-                fileSuffix = "." + std::to_string(i + 1);
+            if (renderOptions->frameCount > 1 || renderOptions->startFrame != 0) {
+                int frameNum = renderOptions->startFrame + i;
+                
+                std::stringstream ss;
+                ss << "." << std::setw(4) << std::setfill('0') << frameNum;
+                
+                fileSuffix = ss.str();
             }
             
             Float frameStartTime = renderOptions->firstFrameTime + renderOptions->frameInterval * i;
@@ -1505,6 +1515,10 @@ void pbrtWorldEnd() {
             ProfilerState = ProfToBits(Prof::SceneConstruction);
             
         }
+        
+        // Erase primitives and lights from _RenderOptions_
+        renderOptions->primitives.erase(renderOptions->primitives.begin(), renderOptions->primitives.end());
+        renderOptions->lights.erase(renderOptions->lights.begin(), renderOptions->lights.end());
     }
 
     // Clean up after rendering. Do this before reporting stats so that
@@ -1551,10 +1565,6 @@ DifferentialRenderingScenePair *RenderOptions::MakeScene(Float startTime, Float 
         if (!proxyAccelerator) proxyAccelerator = std::make_shared<BVHAccel>(proxyPrimitives, startTime, endTime);
         proxyScene = new Scene(proxyAccelerator, lights, startTime, endTime, /* isProxy = */ true);
     }
-    
-    // Erase primitives and lights from _RenderOptions_
-    primitives.erase(primitives.begin(), primitives.end());
-    lights.erase(lights.begin(), lights.end());
     
     return new DifferentialRenderingScenePair(scene, proxyScene);
 }
