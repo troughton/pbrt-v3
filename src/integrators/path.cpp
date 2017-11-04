@@ -99,25 +99,9 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
                 L += beta * isect.Le(-ray.d);
                 VLOG(2) << "Added Le -> L = " << L;
             } else {
-                
-                bool foundProxy = false;
-                
-                for (const auto &light : scene.lightProbes) {
-                    const LightProbe *probe = dynamic_cast<const LightProbe*>(light.get());
-                    if (Inside(ray.o, probe->proxyVolume)) {
-                        L += beta * light->Le(ray);
-                        foundProxy = true;
-                    }
-                }
-                
-                if (!foundProxy) {
-                    for (const auto &light : scene.infiniteLights)
-                        L += beta * light->Le(ray);
-                }
+                for (const auto &light : scene.infiniteLights)
+                    L += beta * light->Le(ray);
                 VLOG(2) << "Added infinite area lights -> L = " << L;
-                if (bounces == 0 && !L.IsBlack()) {
-                    firstIntersectionType = FirstIntersectionType::InfiniteAreaLight;
-                }
             }
         }
 
@@ -219,7 +203,7 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
     ReportValue(pathLength, bounces);
     return L;
 }
-
+    
 PathIntegrator *CreatePathIntegrator(const ParamSet &params,
                                      std::shared_ptr<Sampler> sampler,
                                      std::shared_ptr<const Camera> camera) {

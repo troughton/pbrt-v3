@@ -49,33 +49,55 @@
 namespace pbrt {
 
 // LightProbe Declarations
-class LightProbe : public Light {
+class LightProbe {
   public:
+    struct InfluenceArea {
+        Vector3f ellipsoidInvABCSq;
+        Float innerRadius;
+        Float outerRadius;
+        
+        InfluenceArea(const Vector3f& ellipsoidABC, Float innerRadius, Float outerRadius) :
+            innerRadius(innerRadius),
+            outerRadius(outerRadius) {
+                
+                this->ellipsoidInvABCSq = Vector3f(1.0 / (ellipsoidABC.x * ellipsoidABC.x),
+                                                   1.0 / (ellipsoidABC.y * ellipsoidABC.y),
+                                                   1.0 / (ellipsoidABC.z * ellipsoidABC.z));
+                
+            }
+        
+        inline Float evaluateRadiusSq(const Vector3f& point) const {
+            return point.x * point.x * ellipsoidInvABCSq.x +
+                point.y * point.y * ellipsoidInvABCSq.y +
+                point.z * point.z * ellipsoidInvABCSq.z;
+        }
+        
+        inline Float evaluateRadius(const Vector3f& point) const {
+            return sqrt(this->evaluateRadiusSq(point));
+        }
+    };
+    
     // LightProbe Public Methods
-    LightProbe(const Transform &LightToWorld, const Spectrum &power, const Bounds3f proxyVolume, int nSamples, const std::string &texmap);
-    void Preprocess(const Scene &scene) {
-        scene.WorldBound().BoundingSphere(&worldCenter, &worldRadius);
-    }
-    Spectrum Power() const;
-    Spectrum Le(const RayDifferential &ray) const;
-    Spectrum Sample_Li(const Interaction &ref, const Point2f &u, Vector3f *wi,
-                       Float *pdf, VisibilityTester *vis) const;
-    Float Pdf_Li(const Interaction &, const Vector3f &) const;
-    Spectrum Sample_Le(const Point2f &u1, const Point2f &u2, Float time,
-                       Ray *ray, Normal3f *nLight, Float *pdfPos,
-                       Float *pdfDir) const;
-    void Pdf_Le(const Ray &, const Normal3f &, Float *pdfPos,
-                Float *pdfDir) const;
+    LightProbe(const Transform &LightToWorld, const Spectrum &L, const std::string &texmap, const Bounds3f& proxyVolume, const InfluenceArea& influenceArea);
+    
+    Spectrum Power(Float worldRadius) const;
+    Spectrum Le(const Ray &ray) const;
+    Float Pdf_Li(const Interaction &, const Vector3f &w) const;
+    Float ComputeInfluenceWeight(const Point3f& point) const;
 
     const Bounds3f proxyVolume;
-
+    const Point3f worldSpacePosition;
+    const InfluenceArea influenceArea;
+    
+    const Transform LightToWorld, WorldToLight;
+    std::unique_ptr<Distribution2D> distribution;
+    std::unique_ptr<MIPMap<RGBSpectrum>> Lmap;
+    
   private:
     // LightProbe Private Data
-    std::unique_ptr<MIPMap<RGBSpectrum>> Lmap;
+
     Point3f worldCenter;
     Float worldRadius;
-    std::unique_ptr<Distribution2D> distribution;
-    Point3f worldSpacePosition;
 };
 
 std::shared_ptr<LightProbe> CreateLightProbe(
