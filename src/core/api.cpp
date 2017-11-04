@@ -1480,7 +1480,7 @@ void pbrtWorldEnd() {
             Float frameStartTime = renderOptions->firstFrameTime + renderOptions->frameInterval * i;
             std::unique_ptr<Integrator> integrator(renderOptions->MakeIntegrator(frameStartTime, fileSuffix));
             
-            Float frameEndTime = integrator->GetCamera().shutterClose;
+            Float frameEndTime = frameStartTime + integrator->GetCamera().shutterClose;
             std::unique_ptr<DifferentialRenderingScenePair> scenePair(renderOptions->MakeScene(frameStartTime, frameEndTime));
             
             // This is kind of ugly; we directly override the current profiler
