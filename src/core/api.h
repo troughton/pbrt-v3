@@ -78,6 +78,7 @@ void pbrtTexture(const std::string &name, const std::string &type,
 void pbrtMaterial(const std::string &name, const ParamSet &params);
 void pbrtMakeNamedMaterial(const std::string &name, const ParamSet &params);
 void pbrtNamedMaterial(const std::string &name);
+void pbrtLightProbe(const ParamSet &params);
 void pbrtLightSource(const std::string &name, const ParamSet &params);
 void pbrtAreaLightSource(const std::string &name, const ParamSet &params);
 void pbrtShape(const std::string &name, const ParamSet &params);

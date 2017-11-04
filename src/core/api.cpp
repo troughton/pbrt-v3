@@ -65,6 +65,7 @@
 #include "lights/goniometric.h"
 #include "lights/infinite.h"
 #include "lights/lightprobe.h"
+#include "lights/lightprobecollection.h"
 #include "lights/point.h"
 #include "lights/projection.h"
 #include "lights/spot.h"
@@ -207,6 +208,7 @@ struct RenderOptions {
     TransformSet CameraToWorld;
     std::map<std::string, std::shared_ptr<Medium>> namedMedia;
     std::vector<std::shared_ptr<Light>> lights;
+    std::vector<std::shared_ptr<LightProbe>> lightProbes;
     std::vector<std::shared_ptr<Primitive>> primitives;
     std::map<std::string, std::vector<std::shared_ptr<Primitive>>> instances;
     std::vector<std::shared_ptr<Primitive>> *currentInstance = nullptr;
@@ -647,8 +649,6 @@ std::shared_ptr<Light> MakeLight(const std::string &name,
         light = CreateDistantLight(light2world, paramSet);
     else if (name == "infinite" || name == "exinfinite")
         light = CreateInfiniteLight(light2world, paramSet);
-    else if (name == "lightprobe")
-        light = CreateLightProbe(light2world, paramSet);
     else
         Warning("Light \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();
@@ -1151,6 +1151,20 @@ void pbrtNamedMaterial(const std::string &name) {
     if (PbrtOptions.cat || PbrtOptions.toPly)
         printf("%*sNamedMaterial \"%s\"\n", catIndentCount, "", name.c_str());
 }
+    
+void pbrtLightProbe(const ParamSet &params) {
+    VERIFY_WORLD("LightProbe");
+    WARN_IF_ANIMATED_TRANSFORM("LightProbe");
+    
+    std::shared_ptr<LightProbe> lightProbe = CreateLightProbe(curTransform.ActiveTransform(), params);
+    renderOptions->lightProbes.push_back(lightProbe);
+
+    if (PbrtOptions.cat || PbrtOptions.toPly) {
+        printf("%*sLightProbe ", catIndentCount, " ");
+        params.Print(catIndentCount);
+        printf("\n");
+    }
+}
 
 void pbrtLightSource(const std::string &name, const ParamSet &params) {
     VERIFY_WORLD("LightSource");
@@ -1454,7 +1468,10 @@ void pbrtWorldEnd() {
         Warning("Missing end to pbrtTransformBegin()");
         pushedTransforms.pop_back();
     }
-
+    
+    std::shared_ptr<LightProbeCollection> lightProbeCollection = CreateLightProbeCollection(renderOptions->lightProbes);
+    renderOptions->lights.push_back(lightProbeCollection);
+    
     // Create scene and render
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("%*sWorldEnd\n", catIndentCount, "");

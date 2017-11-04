@@ -40,13 +40,7 @@
 namespace pbrt {
     
     // LightProbe Method Definitions
-    LightProbe::LightProbe(const Transform &LightToWorld,
-                           const Spectrum &L,
-                           const Bounds3f proxyVolume,
-                           int nSamples,
-                           const std::string &texmap)
-    : Light((int)LightFlags::Probe, LightToWorld, MediumInterface(),
-            nSamples), proxyVolume(proxyVolume), worldSpacePosition(LightToWorld(Point3f())) {
+    LightProbe::LightProbe(const Transform &LightToWorld, const Spectrum &L, const std::string &texmap, const Bounds3f& proxyVolume, const InfluenceArea &influenceArea) : proxyVolume(proxyVolume), worldSpacePosition(LightToWorld(Point3f())), influenceArea(influenceArea) {
         // Read texel data from _texmap_ and initialize _Lmap_
         Point2i resolution;
         std::unique_ptr<RGBSpectrum[]> texels(nullptr);
@@ -84,18 +78,29 @@ namespace pbrt {
         // Compute sampling distributions for rows and columns of image
         distribution.reset(new Distribution2D(img.get(), width, height));
         
-        if (!Inside(this->worldSpacePosition, proxyVolume)) {
-            Error("Light probe position (%.2f, %.2f, %.2f) must be inside proxy volume.", this->worldSpacePosition.x, this->worldSpacePosition.y, this->worldSpacePosition.z);
+        if (!Inside(this->worldSpacePosition, this->proxyVolume)) {
+            Error("Light probe not inside proxy volume");
         }
+        
     }
     
-    Spectrum LightProbe::Power() const {
+    Float LightProbe::ComputeInfluenceWeight(const Point3f& point) const {
+        Float pointRadius = this->influenceArea.evaluateRadius(point - this->worldSpacePosition);
+        
+        Float clampedRadius = Clamp(pointRadius, this->influenceArea.innerRadius, this->influenceArea.outerRadius);
+        Float weight = 1.0 - (clampedRadius - this->influenceArea.innerRadius) / (this->influenceArea.outerRadius - this->influenceArea.innerRadius);
+        
+        return weight;
+    }
+
+
+    Spectrum LightProbe::Power(Float worldRadius) const {
         return Pi * worldRadius * worldRadius *
         Spectrum(Lmap->Lookup(Point2f(.5f, .5f), .5f),
                  SpectrumType::Illuminant);
     }
     
-    Spectrum LightProbe::Le(const RayDifferential &ray) const {
+    Spectrum LightProbe::Le(const Ray &ray) const {
         Float t0, t1;
         if (!this->proxyVolume.IntersectP(ray, &t0, &t1)) {
             Error("Proxy volume intersection failed for light probe.");
@@ -109,32 +114,6 @@ namespace pbrt {
         return Spectrum(Lmap->Lookup(st), SpectrumType::Illuminant);
     }
     
-    Spectrum LightProbe::Sample_Li(const Interaction &ref, const Point2f &u,
-                                   Vector3f *wi, Float *pdf,
-                                   VisibilityTester *vis) const {
-        ProfilePhase _(Prof::LightSample);
-        // Find $(u,v)$ sample coordinates in infinite light texture
-        Float mapPdf;
-        Point2f uv = distribution->SampleContinuous(u, &mapPdf);
-        if (mapPdf == 0) return Spectrum(0.f);
-        
-        // Convert infinite light sample point to direction
-        Float theta = uv[1] * Pi, phi = uv[0] * 2 * Pi;
-        Float cosTheta = std::cos(theta), sinTheta = std::sin(theta);
-        Float sinPhi = std::sin(phi), cosPhi = std::cos(phi);
-        *wi =
-        LightToWorld(Vector3f(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta));
-        
-        // Compute PDF for sampled infinite light direction
-        *pdf = mapPdf / (2 * Pi * Pi * sinTheta);
-        if (sinTheta == 0) *pdf = 0;
-        
-        // Return radiance value for infinite light direction
-        *vis = VisibilityTester(ref, Interaction(ref.p + *wi * (2 * worldRadius),
-                                                 ref.time, mediumInterface));
-        return Spectrum(Lmap->Lookup(uv), SpectrumType::Illuminant);
-    }
-    
     Float LightProbe::Pdf_Li(const Interaction &, const Vector3f &w) const {
         ProfilePhase _(Prof::LightPdf);
         Vector3f wi = WorldToLight(w);
@@ -144,65 +123,25 @@ namespace pbrt {
         return distribution->Pdf(Point2f(phi * Inv2Pi, theta * InvPi)) /
         (2 * Pi * Pi * sinTheta);
     }
+
     
-    Spectrum LightProbe::Sample_Le(const Point2f &u1, const Point2f &u2,
-                                   Float time, Ray *ray, Normal3f *nLight,
-                                   Float *pdfPos, Float *pdfDir) const {
-        ProfilePhase _(Prof::LightSample);
-        // Compute direction for infinite light sample ray
-        Point2f u = u1;
-        
-        // Find $(u,v)$ sample coordinates in infinite light texture
-        Float mapPdf;
-        Point2f uv = distribution->SampleContinuous(u, &mapPdf);
-        if (mapPdf == 0) return Spectrum(0.f);
-        Float theta = uv[1] * Pi, phi = uv[0] * 2.f * Pi;
-        Float cosTheta = std::cos(theta), sinTheta = std::sin(theta);
-        Float sinPhi = std::sin(phi), cosPhi = std::cos(phi);
-        Vector3f d =
-        -LightToWorld(Vector3f(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta));
-        *nLight = (Normal3f)d;
-        
-        // Compute origin for infinite light sample ray
-        Vector3f v1, v2;
-        CoordinateSystem(-d, &v1, &v2);
-        Point2f cd = ConcentricSampleDisk(u2);
-        Point3f pDisk = worldCenter + worldRadius * (cd.x * v1 + cd.y * v2);
-        *ray = Ray(pDisk + worldRadius * -d, d, Infinity, time);
-        
-        // Compute _LightProbe_ ray PDFs
-        *pdfDir = sinTheta == 0 ? 0 : mapPdf / (2 * Pi * Pi * sinTheta);
-        *pdfPos = 1 / (Pi * worldRadius * worldRadius);
-        return Spectrum(Lmap->Lookup(uv), SpectrumType::Illuminant);
-    }
-    
-    void LightProbe::Pdf_Le(const Ray &ray, const Normal3f &, Float *pdfPos,
-                            Float *pdfDir) const {
-        ProfilePhase _(Prof::LightPdf);
-        Vector3f d = -WorldToLight(ray.d);
-        Float theta = SphericalTheta(d), phi = SphericalPhi(d);
-        Point2f uv(phi * Inv2Pi, theta * InvPi);
-        Float mapPdf = distribution->Pdf(uv);
-        *pdfDir = mapPdf / (2 * Pi * Pi * std::sin(theta));
-        *pdfPos = 1 / (Pi * worldRadius * worldRadius);
-    }
-    
-    std::shared_ptr<LightProbe> CreateLightProbe(
-                                                 const Transform &light2world, const ParamSet &paramSet) {
+    std::shared_ptr<LightProbe> CreateLightProbe(const Transform &light2world, const ParamSet &paramSet) {
         Spectrum L = paramSet.FindOneSpectrum("L", Spectrum(1.0));
         Spectrum sc = paramSet.FindOneSpectrum("scale", Spectrum(1.0));
         std::string texmap = paramSet.FindOneFilename("mapname", "");
-        int nSamples = paramSet.FindOneInt("samples",
-                                           paramSet.FindOneInt("nsamples", 1));
         
-        const Point3f min = paramSet.FindOnePoint3f("minbound", Point3f(0, 0, 0));
-        const Point3f max = paramSet.FindOnePoint3f("maxbound", Point3f(1, 1, 1));
-        const Bounds3f proxyVolume = Bounds3f(min, max);
+        Vector3f ellipsoidABC =  paramSet.FindOneVector3f("ellipsoiddabc", Vector3f(1, 1, 1));
+        Float innerRadius = paramSet.FindOneFloat("innerradius", 1);
+        Float outerRadius = paramSet.FindOneFloat("outerradius", 1);
+
+        LightProbe::InfluenceArea influenceArea(ellipsoidABC, innerRadius, outerRadius);
         
-        if (PbrtOptions.quickRender) nSamples = std::max(1, nSamples / 4);
-        return std::make_shared<LightProbe>(light2world, L * sc,proxyVolume,nSamples,
-                                            texmap);
+        Point3f minProxyBound = paramSet.FindOnePoint3f("minbound", Point3f(0, 0, 0));
+        Point3f maxProxyBound = paramSet.FindOnePoint3f("maxbound", Point3f(1, 1, 1));
+        
+        Bounds3f proxyVolume = Bounds3f(minProxyBound, maxProxyBound);
+
+        return std::make_shared<LightProbe>(light2world, L * sc, texmap, proxyVolume, influenceArea);
     }
     
 }  // namespace pbrt
-

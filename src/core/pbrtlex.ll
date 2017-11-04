@@ -144,6 +144,7 @@ ImageSequence           { return IMAGESEQUENCE; }
 Include                 { return INCLUDE; }
 Keyframe                { return KEYFRAME; }
 LightSource             { return LIGHTSOURCE; }
+LightProbe              { return LIGHTPROBE; }
 LookAt                  { return LOOKAT; }
 MakeNamedMedium         { return MAKENAMEDMEDIUM; }
 MakeNamedMaterial       { return MAKENAMEDMATERIAL; }
