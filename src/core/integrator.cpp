@@ -274,6 +274,8 @@ void SamplerIntegrator::Render(const DifferentialRenderingScenePair &scene) {
                 if (!InsideExclusive(pixel, pixelBounds))
                     continue;
 
+                size_t hits = 0;
+                
                 do {
                     // Initialize _CameraSample_ for current sample
                     CameraSample cameraSample =
@@ -336,10 +338,17 @@ void SamplerIntegrator::Render(const DifferentialRenderingScenePair &scene) {
                     if (!camera->film->hasBackgroundImage || firstIntersectionType != FirstIntersectionType::InfiniteAreaLight) {
                         filmTile->AddSample(cameraSample.pFilm, L, Ldenom, firstIntersectionType == FirstIntersectionType::ProxyGeometry, rayWeight);
                     }
+                    if (firstIntersectionType != FirstIntersectionType::None && firstIntersectionType != FirstIntersectionType::InfiniteAreaLight) {
+                        hits += 1;
+                    }
+                    if (sampleNumber > this->sampler->samplesPerPixel/4 && hits == 0) {
+                        break;
+                    }
 
                     // Free _MemoryArena_ memory from computing image sample
                     // value
                     arena.Reset();
+                    
                 } while (tileSampler->StartNextSample());
             }
             LOG(INFO) << "Finished image tile " << tileBounds;

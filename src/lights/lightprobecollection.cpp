@@ -79,7 +79,7 @@ namespace pbrt {
         int maxWeightIndex;
         Float weightSum = this->ComputeLightProbeBlendWeights(&weights[0], ref.p, maxWeightIndex);
         
-        std::shared_ptr<LightProbe> maxWeightProbe = this->lightProbes[maxWeightIndex];
+        const std::shared_ptr<LightProbe>& maxWeightProbe = this->lightProbes[maxWeightIndex];
         
         // Find $(u,v)$ sample coordinates in infinite light texture
         Float mapPdf;
