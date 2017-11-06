@@ -90,7 +90,7 @@ namespace pbrt {
         Float theta = uv[1] * Pi, phi = uv[0] * 2 * Pi;
         Float cosTheta = std::cos(theta), sinTheta = std::sin(theta);
         Float sinPhi = std::sin(phi), cosPhi = std::cos(phi);
-        *wi = LightToWorld(Vector3f(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta));
+        *wi = maxWeightProbe->LightToWorld(Vector3f(sinTheta * cosPhi, sinTheta * sinPhi, cosTheta));
         
         // Compute PDF for sampled infinite light direction
         *pdf = mapPdf / (2 * Pi * Pi * sinTheta);
