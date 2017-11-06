@@ -258,13 +258,12 @@ namespace pbrt {
                         
                         Float proxyRGBDenom[3];
                         XYZToRGB(proxyPixel.xyzDenominator, proxyRGBDenom);
-                        
+
 //                        Float invWt = 1.0f / proxyPixel.filterWeightSum;
                         Float proxyAlpha = Clamp(proxyPixel.filterWeightSum / expectedWeight, 0.f, 1.f);
                         
                         for (int i = 0; i < 3; i += 1) {
                             backgroundRGB[i] *= (1 - proxyAlpha) + proxyAlpha * proxyRGB[i] / (proxyRGBDenom[i] + MachineEpsilon);
-//                            backgroundRGB[i] += proxyAlpha * (proxyRGB[i] - proxyRGBDenom[i]) * invWt;
                         }
                         
                     }

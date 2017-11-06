@@ -42,13 +42,13 @@ namespace pbrt {
     
     // LightProbe Method Definitions
     LightProbeCollection::LightProbeCollection(const std::vector<std::shared_ptr<LightProbe>> lightProbes)
-    : Light((int)LightFlags::Infinite,Transform(), MediumInterface(), 1), lightProbes(lightProbes) {
+    : Light((int)LightFlags::Infinite, Transform(), MediumInterface(), 1), lightProbes(lightProbes) {
         
     
     }
     
     Spectrum LightProbeCollection::Power() const {
-        Spectrum powerSum = 0;
+        Spectrum powerSum(0.0);
         for (auto& lightProbe : this->lightProbes) {
             powerSum += lightProbe->Power(this->worldRadius);
         }
@@ -60,7 +60,7 @@ namespace pbrt {
         int maxWeightIndex;
         Float weightSum = this->ComputeLightProbeBlendWeights(&weights[0], ray.o, maxWeightIndex);
         
-        Spectrum Le = 0;
+        Spectrum Le(0.0);
         Float invWeightSum = 1.0/weightSum;
         for (size_t i = 0; i < this->lightProbes.size(); i++) {
             if (weights[i] != 0) {
@@ -104,7 +104,7 @@ namespace pbrt {
         
         Float invWeightSum = 1.0/weightSum;
         
-        Spectrum Le = 0;
+        Spectrum Le(0.0);
         for (size_t i = 0; i < this->lightProbes.size(); i++) {
             if (weights[i] != 0) {
                 Le += weights[i] * invWeightSum * this->lightProbes[i]->Le(ray);

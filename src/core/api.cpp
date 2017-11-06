@@ -1474,8 +1474,10 @@ void pbrtWorldEnd() {
         pushedTransforms.pop_back();
     }
     
-    std::shared_ptr<LightProbeCollection> lightProbeCollection = CreateLightProbeCollection(renderOptions->lightProbes);
-    renderOptions->lights.push_back(lightProbeCollection);
+    if (!renderOptions->lightProbes.empty()) {
+        std::shared_ptr<LightProbeCollection> lightProbeCollection = CreateLightProbeCollection(renderOptions->lightProbes);
+        renderOptions->lights.push_back(lightProbeCollection);
+    }
     
     // Create scene and render
     if (PbrtOptions.cat || PbrtOptions.toPly) {

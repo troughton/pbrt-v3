@@ -40,12 +40,13 @@
 namespace pbrt {
     
     // LightProbe Method Definitions
-    LightProbe::LightProbe(const Transform &LightToWorld, const Spectrum &L, const std::string &texmap, const Bounds3f& proxyVolume, const InfluenceArea &influenceArea) : proxyVolume(proxyVolume), worldSpacePosition(LightToWorld(Point3f())), influenceArea(influenceArea) {
+    LightProbe::LightProbe(const Transform &LightToWorld, const Spectrum &L, const std::string &texmap, const Bounds3f& proxyVolume, const InfluenceArea &influenceArea) : proxyVolume(proxyVolume), worldSpacePosition(LightToWorld(Point3f())), influenceArea(influenceArea), LightToWorld(LightToWorld), WorldToLight(Inverse(LightToWorld)) {
         // Read texel data from _texmap_ and initialize _Lmap_
         Point2i resolution;
         std::unique_ptr<RGBSpectrum[]> texels(nullptr);
         if (texmap != "") {
             texels = ReadImage(texmap, &resolution);
+            
             if (texels)
                 for (int i = 0; i < resolution.x * resolution.y; ++i)
                     texels[i] *= L.ToRGBSpectrum();
@@ -87,10 +88,10 @@ namespace pbrt {
     Float LightProbe::ComputeInfluenceWeight(const Point3f& point) const {
         Float pointRadius = this->influenceArea.evaluateRadius(point - this->worldSpacePosition);
         
-        Float clampedRadius = Clamp(pointRadius, this->influenceArea.innerRadius, this->influenceArea.outerRadius);
-        Float weight = 1.0 - (clampedRadius - this->influenceArea.innerRadius) / (this->influenceArea.outerRadius - this->influenceArea.innerRadius);
+        Float clampedRadius = Clamp(pointRadius, this->influenceArea.innerRadius, Infinity);
+        Float weight = (clampedRadius - this->influenceArea.innerRadius) / (this->influenceArea.outerRadius - this->influenceArea.innerRadius);
         
-        return weight;
+        return exp(-3 * weight);
     }
 
 
@@ -111,7 +112,8 @@ namespace pbrt {
         
         Vector3f w = Normalize(WorldToLight(parallaxCorrectedSampleRayWorldSpace));
         Point2f st(SphericalPhi(w) * Inv2Pi, SphericalTheta(w) * InvPi);
-        return Spectrum(Lmap->Lookup(st), SpectrumType::Illuminant);
+        Spectrum result = Spectrum(Lmap->Lookup(st), SpectrumType::Illuminant);
+        return result;
     }
     
     Float LightProbe::Pdf_Li(const Interaction &, const Vector3f &w) const {

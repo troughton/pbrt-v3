@@ -92,12 +92,6 @@ class LightProbe {
     const Transform LightToWorld, WorldToLight;
     std::unique_ptr<Distribution2D> distribution;
     std::unique_ptr<MIPMap<RGBSpectrum>> Lmap;
-    
-  private:
-    // LightProbe Private Data
-
-    Point3f worldCenter;
-    Float worldRadius;
 };
 
 std::shared_ptr<LightProbe> CreateLightProbe(

@@ -82,7 +82,7 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
     // avoid terminating refracted rays that are about to be refracted back
     // out of a medium and thus have their beta value increased.
     Float etaScale = 1;
-
+    
     for (bounces = 0;; ++bounces) {
         // Find next path vertex and accumulate contribution
         VLOG(2) << "Path tracer bounce " << bounces << ", current L = " << L
@@ -102,6 +102,9 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
                 for (const auto &light : scene.infiniteLights)
                     L += beta * light->Le(ray);
                 VLOG(2) << "Added infinite area lights -> L = " << L;
+                if (bounces == 0) {
+                    firstIntersectionType = FirstIntersectionType::InfiniteAreaLight;
+                }
             }
         }
 
