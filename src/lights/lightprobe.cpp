@@ -90,7 +90,7 @@ namespace pbrt {
         
         Float clampedRadius = Clamp(pointRadius, this->influenceArea.innerRadius, Infinity);
         Float weight = (clampedRadius - this->influenceArea.innerRadius) / (this->influenceArea.outerRadius - this->influenceArea.innerRadius);
-        
+
         return exp(-3 * weight);
     }
 
@@ -109,7 +109,7 @@ namespace pbrt {
         Float t = t0 > 0 ? t0 : t1;
         Point3f proxyVolumeHit = ray(t);
         Vector3f parallaxCorrectedSampleRayWorldSpace = proxyVolumeHit - this->worldSpacePosition;
-        
+
         Vector3f w = Normalize(WorldToLight(parallaxCorrectedSampleRayWorldSpace));
         Point2f st(SphericalPhi(w) * Inv2Pi, SphericalTheta(w) * InvPi);
         Spectrum result = Spectrum(Lmap->Lookup(st), SpectrumType::Illuminant);

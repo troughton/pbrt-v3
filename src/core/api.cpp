@@ -1486,9 +1486,10 @@ void pbrtWorldEnd() {
         
         for (int i = 0; i < renderOptions->frameCount; i += 1) {
             
+            int frameNum = renderOptions->startFrame + i;
+            
             std::string fileSuffix = "";
             if (renderOptions->frameCount > 1 || renderOptions->startFrame != 0) {
-                int frameNum = renderOptions->startFrame + i;
                 
                 std::stringstream ss;
                 ss << "." << std::setw(4) << std::setfill('0') << frameNum;
@@ -1496,10 +1497,10 @@ void pbrtWorldEnd() {
                 fileSuffix = ss.str();
             }
             
-            Float frameStartTime = renderOptions->firstFrameTime + renderOptions->frameInterval * i;
+            Float frameStartTime = renderOptions->firstFrameTime + frameNum * renderOptions->frameInterval;
             std::unique_ptr<Integrator> integrator(renderOptions->MakeIntegrator(frameStartTime, fileSuffix));
             
-            Float frameEndTime = frameStartTime + integrator->GetCamera().shutterClose;
+            Float frameEndTime = integrator->GetCamera().shutterClose;
             std::unique_ptr<DifferentialRenderingScenePair> scenePair(renderOptions->MakeScene(frameStartTime, frameEndTime));
             
             // This is kind of ugly; we directly override the current profiler

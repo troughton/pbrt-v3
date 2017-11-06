@@ -359,7 +359,10 @@ namespace pbrt {
         Ray ray = r;
         ray.o = ray.o + (-positionOffset);
         
-        if (!primitive->Intersect(ray, isect)) return false;
+        if (!primitive->Intersect(ray, isect)) {
+            r.insideFluidParticleCount = ray.insideFluidParticleCount;
+            return false;
+        }
         
         r.tMax = ray.tMax;
         r.insideFluidParticleCount = ray.insideFluidParticleCount;
@@ -385,7 +388,11 @@ namespace pbrt {
             this->bvhStartTime = startTime;
             this->bvhEndTime = endTime;
         }
-        return this->frameBVH->WorldBound(startTime, endTime);
+        Bounds3f bounds = this->frameBVH->WorldBound(startTime, endTime);
+        if (bounds == Bounds3f()) { // Invalid bounds
+            return Bounds3f(Point3f(0, 0, 0), Point3f(0, 0, 0));
+        }
+        return bounds;
     }
     
     bool FluidContainer::IntersectP(const Ray &r) const {
@@ -396,11 +403,10 @@ namespace pbrt {
                                    SurfaceInteraction *isect) const {
         Ray ray = r;
         
-        int startingCount = r.insideFluidParticleCount;
-        
         if (this->frameBVH->Intersect(ray, isect)) {
             r.tMax = ray.tMax;
             r.insideFluidParticleCount = ray.insideFluidParticleCount;
+            
             return true;
         }
         
