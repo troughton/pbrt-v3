@@ -437,9 +437,12 @@ pbrt_stmt: ACCELERATOR STRING paramlist
     pbrt::pbrtEndAnimationKeyframes();
 }
 
-| KEYFRAME NUM
+| KEYFRAME NUM paramlist
 {
-    pbrt::pbrtKeyframe($2);
+    pbrt::ParamSet params;
+    pbrt::InitParamSet(params, pbrt::SpectrumType::Reflectance);
+    pbrt::pbrtKeyframe($2, params);
+    pbrt::FreeArgs();
 }
 
 
