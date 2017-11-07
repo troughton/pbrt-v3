@@ -1324,23 +1324,28 @@ Bounds3f AnimatedTransform::BoundPointMotion(const Point3f &p, Float startTime, 
     while (beginKeyframeIt < endKeyframeIt) {
         auto secondKeyframeIt = beginKeyframeIt + 1;
         
-        Float cosTheta = Dot(beginKeyframeIt->R, secondKeyframeIt->R);
-        Float theta = std::acos(Clamp(cosTheta, -1, 1));
+        bounds = Union(bounds, (*secondKeyframeIt->transform)(p));
         
-        const DerivativeTerms &derivativeTerms = this->derivativeTerms[keyframeIntervalNumber];
-        for (int c = 0; c < 3; ++c) {
-            // Find any motion derivative zeros for the component _c_
-            Float zeros[8];
-            int nZeros = 0;
-            IntervalFindZeros(derivativeTerms.c1[c].Eval(p), derivativeTerms.c2[c].Eval(p), derivativeTerms.c3[c].Eval(p),
-                              derivativeTerms.c4[c].Eval(p), derivativeTerms.c5[c].Eval(p), theta, Interval(0., 1.),
-                              zeros, &nZeros);
-            CHECK_LE(nZeros, sizeof(zeros) / sizeof(zeros[0]));
+        if (this->hasRotation) {
+        
+            Float cosTheta = Dot(beginKeyframeIt->R, secondKeyframeIt->R);
+            Float theta = std::acos(Clamp(cosTheta, -1, 1));
             
-            // Expand bounding box for any motion derivative zeros found
-            for (int i = 0; i < nZeros; ++i) {
-                Point3f pz = (*this)(Lerp(zeros[i], startTime, endTime), p);
-                bounds = Union(bounds, pz);
+            const DerivativeTerms &derivativeTerms = this->derivativeTerms[keyframeIntervalNumber];
+            for (int c = 0; c < 3; ++c) {
+                // Find any motion derivative zeros for the component _c_
+                Float zeros[8];
+                int nZeros = 0;
+                IntervalFindZeros(derivativeTerms.c1[c].Eval(p), derivativeTerms.c2[c].Eval(p), derivativeTerms.c3[c].Eval(p),
+                                  derivativeTerms.c4[c].Eval(p), derivativeTerms.c5[c].Eval(p), theta, Interval(0., 1.),
+                                  zeros, &nZeros);
+                CHECK_LE(nZeros, sizeof(zeros) / sizeof(zeros[0]));
+                
+                // Expand bounding box for any motion derivative zeros found
+                for (int i = 0; i < nZeros; ++i) {
+                    Point3f pz = (*this)(Lerp(zeros[i], startTime, endTime), p);
+                    bounds = Union(bounds, pz);
+                }
             }
         }
         

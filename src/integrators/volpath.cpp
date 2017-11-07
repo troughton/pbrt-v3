@@ -97,7 +97,10 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
 
             Vector3f wo = -ray.d, wi;
             mi.phase->Sample_p(wo, &wi, sampler.Get2D());
+            
+            int insideFluidParticleCount = ray.insideFluidParticleCount;
             ray = mi.SpawnRay(wi);
+            ray.insideFluidParticleCount = insideFluidParticleCount;
         } else {
             ++surfaceInteractions;
             // Handle scattering at point on surface for volumetric path tracer
@@ -158,7 +161,9 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
                 etaScale *=
                     (Dot(wo, isect.n) > 0) ? (eta * eta) : 1 / (eta * eta);
             }
+            int insideFluidParticleCount = ray.insideFluidParticleCount;
             ray = isect.SpawnRay(wi);
+            ray.insideFluidParticleCount = insideFluidParticleCount;
 
             // Account for attenuated subsurface scattering, if applicable
             if (isect.bssrdf && (flags & BSDF_TRANSMISSION)) {
@@ -183,7 +188,9 @@ Spectrum VolPathIntegrator::Li(const RayDifferential &r, const Scene &scene,
                 beta *= f * AbsDot(wi, pi.shading.n) / pdf;
                 DCHECK(std::isinf(beta.y()) == false);
                 specularBounce = (flags & BSDF_SPECULAR) != 0;
+                int insideFluidParticleCount = ray.insideFluidParticleCount;
                 ray = pi.SpawnRay(wi);
+                ray.insideFluidParticleCount = insideFluidParticleCount;
             }
         }
 
