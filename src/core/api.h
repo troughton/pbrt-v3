@@ -57,7 +57,7 @@ void pbrtConcatTransform(Float transform[16]);
 void pbrtTransform(Float transform[16]);
 void pbrtCoordinateSystem(const std::string &);
 void pbrtCoordSysTransform(const std::string &);
-void pbrtKeyframe(Float time);
+void pbrtKeyframe(Float time, const ParamSet &params);
 void pbrtEndAnimationKeyframes();
 void pbrtPixelFilter(const std::string &name, const ParamSet &params);
 void pbrtFilm(const std::string &type, const ParamSet &params);

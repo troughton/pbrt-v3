@@ -424,8 +424,8 @@ class TransformKeyframe {
     }
         static void Decompose(const Matrix4x4 &m, Vector3f *T, Quaternion *R,
                           Matrix4x4 *S);
+        static Transform Interpolate(const Matrix4x4 &from, const Matrix4x4 &to, Float t);
     
-        void Interpolate(Float time, Transform *t) const;
         Ray operator()(const Ray &r) const;
         RayDifferential operator()(const RayDifferential &r) const;
         bool HasScale() const {
@@ -459,6 +459,14 @@ class AnimatedTransform {
     Bounds3f MotionBounds(const Bounds3f &b, Float startTime, Float endTime) const;
     Bounds3f BoundPointMotion(const Point3f &p, Float startTime, Float endTime) const;
 
+    Float StartTime() const {
+        return this->keyframes.front().time;
+    }
+    
+    Float EndTime() const {
+        return this->keyframes.back().time;
+    }
+    
   private:
     // AnimatedTransform Private Data
     std::vector<TransformKeyframe> keyframes;

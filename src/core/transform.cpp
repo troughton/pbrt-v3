@@ -1157,6 +1157,30 @@ void TransformKeyframe::Decompose(const Matrix4x4 &m, Vector3f *T,
     // Compute scale _S_ using rotation and original matrix
     *S = Matrix4x4::Mul(Inverse(R), M);
 }
+    
+    Transform TransformKeyframe::Interpolate(const Matrix4x4& from, const Matrix4x4& to, Float dt) {
+        Vector3f fromT, toT;
+        Quaternion fromR, toR;
+        Matrix4x4 fromS, toS;
+        
+        Decompose(from, &fromT, &fromR, &fromS);
+        Decompose(to, &toT, &toR, &toS);
+        
+        // Interpolate translation at _dt_
+        Vector3f trans = (1 - dt) * fromT + dt * toT;
+        
+        // Interpolate rotation at _dt_
+        Quaternion rotate = Slerp(dt, fromR, toR);
+        
+        // Interpolate scale at _dt_
+        Matrix4x4 scale;
+        for (int i = 0; i < 3; ++i)
+            for (int j = 0; j < 3; ++j)
+                scale.m[i][j] = Lerp(dt, fromS.m[i][j], toS.m[i][j]);
+        
+        // Compute interpolated matrix as product of interpolated components
+        return Translate(trans) * rotate.ToTransform() * Transform(scale);
+    }
 
 void AnimatedTransform::Interpolate(Float time, Transform *t) const {
     // Handle boundary conditions for matrix interpolation
