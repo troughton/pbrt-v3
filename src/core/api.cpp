@@ -127,35 +127,6 @@ namespace pbrt {
 // API Global Variables
 Options PbrtOptions;
     
-    
-    class TransformCache {
-    public:
-        // TransformCache Public Methods
-        void Lookup(const Transform &t, Transform **tCached,
-                    Transform **tCachedInverse) {
-            auto iter = cache.find(t);
-            if (iter == cache.end()) {
-                Transform *tr = arena.Alloc<Transform>();
-                *tr = t;
-                Transform *tinv = arena.Alloc<Transform>();
-                *tinv = Transform(Inverse(t));
-                cache[t] = std::make_pair(tr, tinv);
-                iter = cache.find(t);
-            }
-            if (tCached) *tCached = iter->second.first;
-            if (tCachedInverse) *tCachedInverse = iter->second.second;
-        }
-        void Clear() {
-            arena.Reset();
-            cache.erase(cache.begin(), cache.end());
-        }
-        
-    private:
-        // TransformCache Private Data
-        std::map<Transform, std::pair<Transform *, Transform *>> cache;
-        MemoryArena arena;
-    };
-    
     struct Keyframe {
         Float time;
         Transform t;
@@ -167,7 +138,7 @@ Options PbrtOptions;
     
     struct TransformSet {
         
-        TransformSet() : isParentRelative(true), isAnimated(false) {
+        TransformSet() : isAnimated(false) {
             this->keyframes.push_back(Keyframe(0.f, Transform()));
         }
         
@@ -190,101 +161,25 @@ Options PbrtOptions;
             return tInv;
         }
         
-        bool IsAnimated(const std::vector<TransformSet>& parentTransforms, int negativeOffset = 0) const {
-            if (!this->isParentRelative || negativeOffset == parentTransforms.size()) {
-                return false;
-            }
-            
-            return this->isAnimated || parentTransforms.at(parentTransforms.size() - 1 - negativeOffset).IsAnimated(parentTransforms, negativeOffset + 1);
+        bool IsAnimated() const {
+            return this->isAnimated;
         }
         
-        void AddKeyframe(Float time, bool inheritPrevious) {
+        const std::vector<Keyframe>& Keyframes() const {
+            return keyframes;
+        }
+        
+        void AddKeyframe(Float time) {
             if (!this->isAnimated) {
                 this->keyframes.back().time = time;
                 this->isAnimated = true;
             } else {
-                if (time <= this->keyframes.back().time) {
-                    Error("New keyframe time %.2f must be greater than previous time %.2f.", time, this->keyframes.back().time);
-                    exit(-1);
+                if (time < this->keyframes.back().time) {
+                    Error("Keyframe time %.2f is earlier than previous time %.2f.", time, this->keyframes.back().time);
                 }
-                this->keyframes.push_back(Keyframe(time, inheritPrevious ? this->ActiveTransform() : Transform()));
+                this->keyframes.push_back(Keyframe(time, this->ActiveTransform()));
             }
         }
-        
-        // Returns keyframes of this object and its parents
-        std::vector<Keyframe> CombinedKeyframes(const std::vector<TransformSet>& parentTransforms, int negativeOffset = 0) const {
-            if (!this->isParentRelative || negativeOffset == parentTransforms.size()) {
-                return this->keyframes;
-            }
-            
-            const TransformSet& parentSet = parentTransforms.at(parentTransforms.size() - 1 - negativeOffset);
-            std::vector<Keyframe> parentKeyframes = parentSet.CombinedKeyframes(parentTransforms, negativeOffset + 1);
-            
-            std::vector<Float> keyframeTimes;
-            for (const Keyframe& keyframe : this->keyframes) {
-                keyframeTimes.push_back(keyframe.time);
-            }
-            for (const Keyframe& keyframe : parentKeyframes) {
-                if (std::find(keyframeTimes.begin(), keyframeTimes.end(), keyframe.time) == keyframeTimes.end()) {
-                    keyframeTimes.push_back(keyframe.time);
-                }
-            }
-            std::sort(keyframeTimes.begin(), keyframeTimes.end());
-            
-            std::vector<Keyframe> resultKeyframes;
-            resultKeyframes.reserve(keyframeTimes.size());
-            
-            size_t parentIndex = 0;
-            size_t thisIndex = 0;
-            
-            for (Float time : keyframeTimes) {
-                Transform parentTransform;
-                Transform localTransform;
-                
-                if (time == parentKeyframes[parentIndex].time) {
-                    parentTransform = parentKeyframes[parentIndex].t;
-                    parentIndex += 1;
-                } else {
-                    // Interpolate the transform
-                    const Keyframe& startKeyframe = parentKeyframes[parentIndex];
-                    const Keyframe& endKeyframe = (parentIndex + 1 < parentKeyframes.size()) ? parentKeyframes[parentIndex + 1] : startKeyframe;
-                    
-                    Float t = (startKeyframe.time == endKeyframe.time) ? 0.0 : (time - startKeyframe.time) / (endKeyframe.time - startKeyframe.time);
-                    parentTransform = TransformKeyframe::Interpolate(startKeyframe.t.GetMatrix(), endKeyframe.t.GetMatrix(), t);
-                }
-                
-                if (time == this->keyframes[thisIndex].time) {
-                    localTransform = this->keyframes[thisIndex].t;
-                    thisIndex += 1;
-                } else {
-                    // Interpolate the transform
-                    const Keyframe& startKeyframe = this->keyframes[thisIndex];
-                    const Keyframe& endKeyframe = (thisIndex + 1 < this->keyframes.size()) ? this->keyframes[thisIndex + 1] : startKeyframe;
-                    
-                    Float t = (startKeyframe.time == endKeyframe.time) ? 0.0 : (time - startKeyframe.time) / (endKeyframe.time - startKeyframe.time);
-                    localTransform = TransformKeyframe::Interpolate(startKeyframe.t.GetMatrix(), endKeyframe.t.GetMatrix(), t);
-                }
-                
-                Transform toWorldTransform = parentTransform * localTransform;
-                resultKeyframes.push_back(Keyframe(time, toWorldTransform));
-            }
-            return resultKeyframes;
-        }
-        
-        AnimatedTransform ToAnimatedTransform(const std::vector<TransformSet>& parentTransforms, TransformCache& transformCache) const {
-            std::vector<TransformKeyframe> transformKeyframes;
-            
-            for (const Keyframe& keyframe : this->CombinedKeyframes(parentTransforms)) {
-                Transform *t;
-                transformCache.Lookup(keyframe.t, &t, nullptr);
-                transformKeyframes.push_back(TransformKeyframe(t, keyframe.time));
-            }
-            
-            AnimatedTransform animatedObjectToWorld(transformKeyframes);
-            return animatedObjectToWorld;
-        }
-        
-        bool isParentRelative;
         
     private:
         std::vector<Keyframe> keyframes;
@@ -347,6 +242,34 @@ struct GraphicsState {
     bool proxyGeometry = false;
 };
 
+class TransformCache {
+  public:
+    // TransformCache Public Methods
+    void Lookup(const Transform &t, Transform **tCached,
+                Transform **tCachedInverse) {
+        auto iter = cache.find(t);
+        if (iter == cache.end()) {
+            Transform *tr = arena.Alloc<Transform>();
+            *tr = t;
+            Transform *tinv = arena.Alloc<Transform>();
+            *tinv = Transform(Inverse(t));
+            cache[t] = std::make_pair(tr, tinv);
+            iter = cache.find(t);
+        }
+        if (tCached) *tCached = iter->second.first;
+        if (tCachedInverse) *tCachedInverse = iter->second.second;
+    }
+    void Clear() {
+        arena.Reset();
+        cache.erase(cache.begin(), cache.end());
+    }
+
+  private:
+    // TransformCache Private Data
+    std::map<Transform, std::pair<Transform *, Transform *>> cache;
+    MemoryArena arena;
+};
+
 // API Static Data
 enum class APIState { Uninitialized, OptionsBlock, WorldBlock };
 static APIState currentApiState = APIState::Uninitialized;
@@ -400,7 +323,7 @@ std::vector<std::shared_ptr<Shape>> MakeShapes(const std::string &name,
 
 #define WARN_IF_ANIMATED_TRANSFORM(func)                             \
     do {                                                             \
-        if (curTransform.IsAnimated(pushedTransforms))               \
+        if (curTransform.IsAnimated())                               \
             Warning(                                                 \
                 "Animated transformations set; ignoring for \"%s\" " \
                 "and using the start transform only",                \
@@ -772,7 +695,15 @@ Camera *MakeCamera(const std::string &name, const ParamSet &paramSet,
     Camera *camera = nullptr;
     MediumInterface mediumInterface = graphicsState.CreateMediumInterface();
     
-    AnimatedTransform animatedCam2World = cam2worldSet.ToAnimatedTransform(pushedTransforms, transformCache);
+    std::vector<TransformKeyframe> transformKeyframes;
+    
+    for (const Keyframe& keyframe : cam2worldSet.Keyframes()) {
+        Transform *t;
+        transformCache.Lookup(keyframe.t, &t, nullptr);
+        transformKeyframes.push_back(TransformKeyframe(t, keyframe.time));
+    }
+    
+    AnimatedTransform animatedCam2World(transformKeyframes);
     
     if (name == "perspective")
         camera = CreatePerspectiveCamera(paramSet, animatedCam2World, film,
@@ -886,7 +817,6 @@ void pbrtImageSequence(int startFrame, size_t frameCount, Float firstFrameTime, 
 void pbrtIdentity() {
     VERIFY_INITIALIZED("Identity");
     curTransform.ActiveTransform() = Transform();
-    curTransform.isParentRelative = false;
     if (PbrtOptions.cat || PbrtOptions.toPly)
         printf("%*sIdentity\n", catIndentCount, "");
 }
@@ -907,7 +837,6 @@ void pbrtTransform(Float tr[16]) {
                                               tr[1], tr[5], tr[9], tr[13],
                                               tr[2], tr[6], tr[10], tr[14],
                                               tr[3], tr[7], tr[11], tr[15]));
-    curTransform.isParentRelative = false;
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("%*sTransform [ ", catIndentCount, "");
         for (int i = 0; i < 16; ++i) printf("%.9g ", tr[i]);
@@ -1091,7 +1020,6 @@ void pbrtAttributeBegin() {
     VERIFY_WORLD("AttributeBegin");
     pushedGraphicsStates.push_back(graphicsState);
     pushedTransforms.push_back(curTransform);
-    curTransform = TransformSet();
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("\n%*sAttributeBegin\n", catIndentCount, "");
         catIndentCount += 4;
@@ -1120,7 +1048,6 @@ void pbrtAttributeEnd() {
 void pbrtTransformBegin() {
     VERIFY_WORLD("TransformBegin");
     pushedTransforms.push_back(curTransform);
-    curTransform = TransformSet();
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("%*sTransformBegin\n", catIndentCount, "");
         catIndentCount += 4;
@@ -1144,10 +1071,8 @@ void pbrtTransformEnd() {
     }
 }
     
-void pbrtKeyframe(Float time, const ParamSet &params) {
-    bool inheritPrevious = params.FindOneBool("inheritprevious", true);
-    curTransform.AddKeyframe(time, inheritPrevious);
-    params.ReportUnused();
+void pbrtKeyframe(Float time) {
+    curTransform.AddKeyframe(time);
 }
     
 void pbrtEndAnimationKeyframes() {
@@ -1282,7 +1207,7 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
         printf("\n");
     }
 
-    if (!curTransform.IsAnimated(pushedTransforms)) {
+    if (!curTransform.IsAnimated()) {
         // Initialize _prims_ and _areaLights_ for static shape
 
         // Create shapes for shape _name_
@@ -1331,11 +1256,19 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
 
         renderOptions->haveProxyGeometry = renderOptions->haveProxyGeometry || graphicsState.proxyGeometry;
         // Create single _TransformedPrimitive_ for _prims_
+
+        std::vector<TransformKeyframe> transformKeyframes;
         
-        AnimatedTransform animatedObjectToWorld = curTransform.ToAnimatedTransform(pushedTransforms, transformCache);
+        for (const Keyframe& keyframe : curTransform.Keyframes()) {
+            Transform *t;
+            transformCache.Lookup(keyframe.t, &t, nullptr);
+            transformKeyframes.push_back(TransformKeyframe(t, keyframe.time));
+        }
+        
+        AnimatedTransform animatedObjectToWorld(transformKeyframes);
         
         if (prims.size() > 1) {
-            std::shared_ptr<Primitive> bvh = std::make_shared<BVHAccel>(prims, animatedObjectToWorld.StartTime(), animatedObjectToWorld.EndTime());
+            std::shared_ptr<Primitive> bvh = std::make_shared<BVHAccel>(prims, curTransform.Keyframes().front().time, curTransform.Keyframes().back().time);
             prims.clear();
             prims.push_back(bvh);
         }
@@ -1379,7 +1312,15 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
         renderOptions->haveProxyGeometry = renderOptions->haveProxyGeometry || graphicsState.proxyGeometry;
         // Create single _TransformedPrimitive_ for _prims_
         
-        AnimatedTransform animatedObjectToWorld = curTransform.ToAnimatedTransform(pushedTransforms, transformCache);
+        std::vector<TransformKeyframe> transformKeyframes;
+        
+        for (const Keyframe& keyframe : curTransform.Keyframes()) {
+            Transform *t;
+            transformCache.Lookup(keyframe.t, &t, nullptr);
+            transformKeyframes.push_back(TransformKeyframe(t, keyframe.time));
+        }
+        
+        AnimatedTransform animatedObjectToWorld(transformKeyframes);
         
         std::shared_ptr<Primitive> prim = std::make_shared<TransformedPrimitive>(
                                                           container, animatedObjectToWorld);
@@ -1491,24 +1432,29 @@ void pbrtObjectInstance(const std::string &name) {
         renderOptions->instances[name];
     if (in.empty()) return;
     ++nObjectInstancesUsed;
-    
-    
-    AnimatedTransform animatedInstanceToWorld = curTransform.ToAnimatedTransform(pushedTransforms, transformCache);
-    
     if (in.size() > 1) {
         // Create aggregate for instance _Primitive_s
         std::shared_ptr<Primitive> accel(
             MakeAccelerator(renderOptions->AcceleratorName, in,
-                            animatedInstanceToWorld.StartTime(),
-                            animatedInstanceToWorld.EndTime(),
+                            curTransform.Keyframes().front().time,
+                            curTransform.Keyframes().back().time,
                             renderOptions->AcceleratorParams
                             ));
-        if (!accel) accel = std::make_shared<BVHAccel>(in, animatedInstanceToWorld.StartTime(),
-                                                       animatedInstanceToWorld.EndTime());
+        if (!accel) accel = std::make_shared<BVHAccel>(in, curTransform.Keyframes().front().time,
+                                                       curTransform.Keyframes().back().time);
         in.erase(in.begin(), in.end());
         in.push_back(accel);
     }
     
+    std::vector<TransformKeyframe> transformKeyframes;
+    
+    for (const Keyframe& keyframe : curTransform.Keyframes()) {
+        Transform *t;
+        transformCache.Lookup(keyframe.t, &t, nullptr);
+        transformKeyframes.push_back(TransformKeyframe(t, keyframe.time));
+    }
+    
+    AnimatedTransform animatedInstanceToWorld(transformKeyframes);
     
     std::shared_ptr<Primitive> prim(
         std::make_shared<TransformedPrimitive>(in[0], animatedInstanceToWorld));
