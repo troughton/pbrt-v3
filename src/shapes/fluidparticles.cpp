@@ -54,28 +54,25 @@ namespace pbrt {
         Float phi;
         Point3f pHit;
         // Transform _Ray_ to object space
-        Vector3f oErr, dErr;
         const Ray& ray = r;
         
         // Compute quadratic sphere coefficients
         
         // Initialize _EFloat_ ray coordinate values
-        EFloat ox(ray.o.x, oErr.x), oy(ray.o.y, oErr.y), oz(ray.o.z, oErr.z);
-        EFloat dx(ray.d.x, dErr.x), dy(ray.d.y, dErr.y), dz(ray.d.z, dErr.z);
-        EFloat a = dx * dx + dy * dy + dz * dz;
-        EFloat b = 2 * (dx * ox + dy * oy + dz * oz);
-        EFloat c = ox * ox + oy * oy + oz * oz - EFloat(radius) * EFloat(radius);
+        Float a = ray.d.LengthSquared();
+        Float b = 2 * Dot(ray.d, Vector3f(ray.o));
+        Float c = Vector3f(ray.o).LengthSquared() - Float(radius) * Float(radius);
         
         // Solve quadratic equation for _t_ values
-        EFloat t0, t1;
+        Float t0, t1;
         if (!Quadratic(a, b, c, &t0, &t1)) return false;
         
         // Check quadric shape _t0_ and _t1_ for nearest intersection
-        if (t0.UpperBound() > ray.tMax || t1.LowerBound() <= 0) return false;
-        EFloat tShapeHit = t0;
-        if (tShapeHit.LowerBound() <= 0) {
+        if (t0 > ray.tMax || t1 <= 0) return false;
+        Float tShapeHit = t0;
+        if (tShapeHit <= 0) {
             tShapeHit = t1;
-            if (tShapeHit.UpperBound() > ray.tMax) return false;
+            if (tShapeHit > ray.tMax) return false;
         }
         
         // Compute sphere hit position and $\phi$
