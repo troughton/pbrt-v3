@@ -171,7 +171,7 @@ Options PbrtOptions;
             this->keyframes.push_back(Keyframe(0.f, Transform()));
         }
         
-        TransformSet(const TransformSet &ts) : keyframes(ts.keyframes), isAnimated(ts.isAnimated) {
+        TransformSet(const TransformSet &ts) : isParentRelative(ts.isParentRelative), keyframes(ts.keyframes), isAnimated(ts.isAnimated) {
         }
         
         const Transform& ActiveTransform() const {
@@ -182,7 +182,7 @@ Options PbrtOptions;
             return this->keyframes.back().t;
         }
         
-        const Transform& ActiveAbsoluteTransform(const std::vector<TransformSet>& parentTransforms, int negativeOffset = 0) const {
+        Transform ActiveAbsoluteTransform(const std::vector<TransformSet>& parentTransforms, int negativeOffset = 0) const {
             if (!this->isParentRelative || negativeOffset == parentTransforms.size()) {
                 return this->keyframes.back().t;
             }
