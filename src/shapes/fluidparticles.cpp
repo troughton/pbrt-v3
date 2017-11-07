@@ -453,16 +453,17 @@ namespace pbrt {
             particlePrims.push_back(std::make_shared<MovingPrimitive>(spherePrim));
         }
         
+        float *basePositions = (float*)positionsBuffer.data();
+        
         int numParticles = 0;
         
         for (int frame = 0; frame < nFrames; frame += 1) {
             
-            float *positions = (float*)positionsBuffer.data() + numParticles * 3;
+            float *positions = basePositions;
             
             numParticles += newParticlesPerFrame;
             numParticles = std::min(numParticles, nParticles);
     
-            
             Float frameTime = startFrame + frame * frameStep;
             
             for (int i = 0; i < numParticles / particleStride; i += 1) {
@@ -472,6 +473,8 @@ namespace pbrt {
                 prim->keyframes.push_back(PositionKeyframe(position, frameTime));
                 positions += 3 * particleStride;
             }
+            
+            basePositions += 3 * numParticles;
         }
         
         return std::make_shared<FluidContainer>(particlePrims);
