@@ -142,7 +142,7 @@ Options PbrtOptions;
             this->keyframes.push_back(Keyframe(0.f, Transform()));
         }
         
-        TransformSet(const TransformSet &ts) : keyframes(ts.keyframes), isAnimated(ts.isAnimated) {
+        TransformSet(const TransformSet &ts) : isParentRelative(ts.isParentRelative), keyframes(ts.keyframes), isAnimated(ts.isAnimated) {
         }
         
         const Transform& ActiveTransform() const {
@@ -151,6 +151,14 @@ Options PbrtOptions;
         
         Transform& ActiveTransform() {
             return this->keyframes.back().t;
+        }
+        
+        Transform ActiveAbsoluteTransform(const std::vector<TransformSet>& parentTransforms, int negativeOffset = 0) const {
+            if (!this->isParentRelative || negativeOffset == parentTransforms.size()) {
+                return this->keyframes.back().t;
+            }
+            
+            return parentTransforms.at(parentTransforms.size() - 1 - negativeOffset).ActiveAbsoluteTransform(parentTransforms, negativeOffset + 1) * this->keyframes.back().t;
         }
         
         friend TransformSet Inverse(const TransformSet &ts) {
@@ -1212,7 +1220,7 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
 
         // Create shapes for shape _name_
         Transform *ObjToWorld, *WorldToObj;
-        transformCache.Lookup(curTransform.ActiveTransform(), &ObjToWorld, &WorldToObj);
+        transformCache.Lookup(curTransform.ActiveAbsoluteTransform(pushedTransforms), &ObjToWorld, &WorldToObj);
         std::vector<std::shared_ptr<Shape>> shapes =
             MakeShapes(name, ObjToWorld, WorldToObj,
                        graphicsState.reverseOrientation, params);
