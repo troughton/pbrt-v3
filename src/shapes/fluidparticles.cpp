@@ -166,22 +166,20 @@ namespace pbrt {
         // Compute quadratic sphere coefficients
         
         // Initialize _EFloat_ ray coordinate values
-        EFloat ox(ray.o.x, 0.f), oy(ray.o.y, 0.f), oz(ray.o.z, 0.f);
-        EFloat dx(ray.d.x, 0.f), dy(ray.d.y, 0.f), dz(ray.d.z, 0.f);
-        EFloat a = dx * dx + dy * dy + dz * dz;
-        EFloat b = 2 * (dx * ox + dy * oy + dz * oz);
-        EFloat c = ox * ox + oy * oy + oz * oz - EFloat(radius) * EFloat(radius);
+        Float a = ray.d.LengthSquared();
+        Float b = 2 * Dot(ray.d, Vector3f(ray.o));
+        Float c = Vector3f(ray.o).LengthSquared() - Float(radius) * Float(radius);
         
         // Solve quadratic equation for _t_ values
-        EFloat t0, t1;
+        Float t0, t1;
         if (!Quadratic(a, b, c, &t0, &t1)) return false;
         
         // Check quadric shape _t0_ and _t1_ for nearest intersection
-        if (t0.UpperBound() > ray.tMax || t1.LowerBound() <= 0) return false;
-        EFloat tShapeHit = t0;
-        if (tShapeHit.LowerBound() <= 0) {
+        if (t0 > ray.tMax || t1 <= 0) return false;
+        Float tShapeHit = t0;
+        if (tShapeHit <= 0) {
             tShapeHit = t1;
-            if (tShapeHit.UpperBound() > ray.tMax) return false;
+            if (tShapeHit > ray.tMax) return false;
         }
         
         return true;
@@ -447,7 +445,7 @@ namespace pbrt {
         
         std::vector<std::shared_ptr<Primitive>> particlePrims;
         
-        const int particleStride = 6; // render every sixth particle.
+        const int particleStride = 8; // render every sixth particle.
         
         for (int i = 0; i < nParticles / particleStride; i += 1) {
             particlePrims.push_back(std::make_shared<MovingPrimitive>(spherePrim));
@@ -455,7 +453,7 @@ namespace pbrt {
         
         float *basePositions = (float*)positionsBuffer.data();
         
-        int numParticles = 0;
+        int numParticles = 500; // starting count is 500
         
         for (int frame = 0; frame < nFrames; frame += 1) {
             
