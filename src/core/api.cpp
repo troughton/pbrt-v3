@@ -1065,7 +1065,7 @@ void pbrtMakeNamedMedium(const std::string &name, const ParamSet &params) {
         Error("No parameter string \"type\" found in MakeNamedMedium");
     else {
         std::shared_ptr<Medium> medium =
-            MakeMedium(type, params, curTransform.ActiveTransform());
+            MakeMedium(type, params, curTransform.ActiveAbsoluteTransform(pushedTransforms));
         if (medium) renderOptions->namedMedia[name] = medium;
     }
     if (PbrtOptions.cat || PbrtOptions.toPly) {
@@ -1174,7 +1174,7 @@ void pbrtTexture(const std::string &name, const std::string &type,
             Warning("Texture \"%s\" being redefined", name.c_str());
         WARN_IF_ANIMATED_TRANSFORM("Texture");
         std::shared_ptr<Texture<Float>> ft =
-            MakeFloatTexture(texname, curTransform.ActiveTransform(), tp);
+            MakeFloatTexture(texname, curTransform.ActiveAbsoluteTransform(pushedTransforms), tp);
         if (ft) graphicsState.floatTextures[name] = ft;
     } else if (type == "color" || type == "spectrum") {
         // Create _color_ texture and store in _spectrumTextures_
@@ -1183,7 +1183,7 @@ void pbrtTexture(const std::string &name, const std::string &type,
             Warning("Texture \"%s\" being redefined", name.c_str());
         WARN_IF_ANIMATED_TRANSFORM("Texture");
         std::shared_ptr<Texture<Spectrum>> st =
-            MakeSpectrumTexture(texname, curTransform.ActiveTransform(), tp);
+            MakeSpectrumTexture(texname, curTransform.ActiveAbsoluteTransform(pushedTransforms), tp);
         if (st) graphicsState.spectrumTextures[name] = st;
     } else
         Error("Texture type \"%s\" unknown.", type.c_str());
@@ -1243,7 +1243,7 @@ void pbrtLightProbe(const ParamSet &params) {
     VERIFY_WORLD("LightProbe");
     WARN_IF_ANIMATED_TRANSFORM("LightProbe");
     
-    std::shared_ptr<LightProbe> lightProbe = CreateLightProbe(curTransform.ActiveTransform(), params);
+    std::shared_ptr<LightProbe> lightProbe = CreateLightProbe(curTransform.ActiveAbsoluteTransform(pushedTransforms), params);
     renderOptions->lightProbes.push_back(lightProbe);
 
     if (PbrtOptions.cat || PbrtOptions.toPly) {
@@ -1257,7 +1257,7 @@ void pbrtLightSource(const std::string &name, const ParamSet &params) {
     VERIFY_WORLD("LightSource");
     WARN_IF_ANIMATED_TRANSFORM("LightSource");
     MediumInterface mi = graphicsState.CreateMediumInterface();
-    std::shared_ptr<Light> lt = MakeLight(name, params, curTransform.ActiveTransform(), mi);
+    std::shared_ptr<Light> lt = MakeLight(name, params, curTransform.ActiveAbsoluteTransform(pushedTransforms), mi);
     if (!lt)
         Error("LightSource: light type \"%s\" unknown.", name.c_str());
     else
@@ -1307,7 +1307,7 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
             // Possibly create area light for shape
             std::shared_ptr<AreaLight> area;
             if (graphicsState.areaLight != "") {
-                area = MakeAreaLight(graphicsState.areaLight, curTransform.ActiveTransform(),
+                area = MakeAreaLight(graphicsState.areaLight, curTransform.ActiveAbsoluteTransform(pushedTransforms),
                                      mi, graphicsState.areaLightParams, s);
                 if (area) areaLights.push_back(area);
             }
@@ -1558,6 +1558,8 @@ void pbrtWorldEnd() {
                 
                 fileSuffix = ss.str();
             }
+            
+            std::cout << "Rendering frame " << frameNum << ". " << std::endl;
             
             Float frameStartTime = renderOptions->firstFrameTime + frameNum * renderOptions->frameInterval;
             std::unique_ptr<Integrator> integrator(renderOptions->MakeIntegrator(frameStartTime, fileSuffix));
