@@ -149,6 +149,9 @@ LightProbe              { return LIGHTPROBE; }
 LookAt                  { return LOOKAT; }
 MakeNamedMedium         { return MAKENAMEDMEDIUM; }
 MakeNamedMaterial       { return MAKENAMEDMATERIAL; }
+AnimatedMediaBegin      { return ANIMATEDMEDIABEGIN; }
+AnimatedMediaEnd        { return ANIMATEDMEDIAEND; }
+MediaInterface          { return MEDIAINTERFACE; }
 Material                { return MATERIAL; }
 MediumInterface         { return MEDIUMINTERFACE; }
 NamedMaterial           { return NAMEDMATERIAL; }

@@ -116,6 +116,7 @@
 #include "textures/windy.h"
 #include "textures/wrinkled.h"
 #include "media/grid.h"
+#include "media/grid-container.h"
 #include "media/homogeneous.h"
 #include <map>
 #include <sstream>
@@ -251,7 +252,10 @@ Options PbrtOptions;
                 
                 if (time == parentKeyframes[parentIndex].time) {
                     parentTransform = parentKeyframes[parentIndex].t;
-                    parentIndex += 1;
+                    
+                    if (parentIndex + 1 < parentKeyframes.size()) {
+                        parentIndex += 1;
+                    }
                 } else {
                     // Interpolate the transform
                     const Keyframe& startKeyframe = parentKeyframes[parentIndex];
@@ -263,7 +267,10 @@ Options PbrtOptions;
                 
                 if (time == this->keyframes[thisIndex].time) {
                     localTransform = this->keyframes[thisIndex].t;
-                    thisIndex += 1;
+                    
+                    if (thisIndex + 1 < keyframes.size()) {
+                        thisIndex += 1;
+                    }
                 } else {
                     // Interpolate the transform
                     const Keyframe& startKeyframe = this->keyframes[thisIndex];
@@ -322,6 +329,8 @@ struct RenderOptions {
     ParamSet CameraParams;
     TransformSet CameraToWorld;
     std::map<std::string, std::shared_ptr<Medium>> namedMedia;
+    std::vector<std::string> animatedMedia;
+    std::vector<std::string> animatedGridDensityMedia;
     std::vector<std::shared_ptr<Light>> lights;
     std::vector<std::shared_ptr<LightProbe>> lightProbes;
     std::vector<std::shared_ptr<Primitive>> primitives;
@@ -669,6 +678,11 @@ std::shared_ptr<Texture<Spectrum>> MakeSpectrumTexture(
     return std::shared_ptr<Texture<Spectrum>>(tex);
 }
 
+std::shared_ptr<Medium> MakeMedia(const std::vector<std::shared_ptr<GridDensityMedium>> gridDensityMedia) {
+  Medium *m = new GridDensityMediaContainer(gridDensityMedia);
+  return std::shared_ptr<Medium>(m);
+}
+  
 std::shared_ptr<Medium> MakeMedium(const std::string &name,
                                    const ParamSet &paramSet,
                                    const Transform &medium2world) {
@@ -1065,7 +1079,7 @@ void pbrtMakeNamedMedium(const std::string &name, const ParamSet &params) {
         Error("No parameter string \"type\" found in MakeNamedMedium");
     else {
         std::shared_ptr<Medium> medium =
-            MakeMedium(type, params, curTransform.ActiveTransform());
+            MakeMedium(type, params, curTransform.ActiveAbsoluteTransform(pushedTransforms));
         if (medium) renderOptions->namedMedia[name] = medium;
     }
     if (PbrtOptions.cat || PbrtOptions.toPly) {
@@ -1084,6 +1098,45 @@ void pbrtMediumInterface(const std::string &insideName,
     if (PbrtOptions.cat || PbrtOptions.toPly)
         printf("%*sMediumInterface \"%s\" \"%s\"\n", catIndentCount, "",
                insideName.c_str(), outsideName.c_str());
+}
+
+  
+void pbrtAnimatedMediaBegin(const std::string &name) {
+  if (!renderOptions->animatedMedia.empty()) {
+    Error("Nested animated media not supported.");
+  }
+  renderOptions->animatedMedia.push_back(name);
+}
+  
+void pbrtMediaInterface(const std::string &name) {
+  renderOptions->animatedGridDensityMedia.push_back(name);
+}
+  
+void pbrtAnimatedMediaEnd() {
+  if (renderOptions->animatedMedia.empty()) {
+    Error("AnimateMediaEnd without AnimateMediaBegin");
+  }
+  
+  std::string mediaName = renderOptions->animatedMedia.back();
+  renderOptions->animatedMedia.pop_back();
+  
+  std::vector<std::shared_ptr<GridDensityMedium>> gridDensityMedia;
+  for (std::string gridDensityMediumName : renderOptions->animatedGridDensityMedia) {
+    std::map<std::string, std::shared_ptr<Medium>>::iterator it = renderOptions->namedMedia.find(gridDensityMediumName);
+    
+    if (it != renderOptions->namedMedia.end()) {
+      std::shared_ptr<GridDensityMedium> gridDensityMedium = std::dynamic_pointer_cast<GridDensityMedium>(it->second);
+      gridDensityMedia.push_back(gridDensityMedium);
+    }
+  }
+  
+  std::shared_ptr<Medium> medium = MakeMedia(gridDensityMedia);
+  if (medium) {
+     renderOptions->namedMedia[mediaName] = medium;
+  }
+  
+  graphicsState.currentInsideMedium = mediaName;
+  renderOptions->haveScatteringMedia = true;
 }
 
 void pbrtWorldBegin() {
@@ -1174,7 +1227,7 @@ void pbrtTexture(const std::string &name, const std::string &type,
             Warning("Texture \"%s\" being redefined", name.c_str());
         WARN_IF_ANIMATED_TRANSFORM("Texture");
         std::shared_ptr<Texture<Float>> ft =
-            MakeFloatTexture(texname, curTransform.ActiveTransform(), tp);
+            MakeFloatTexture(texname, curTransform.ActiveAbsoluteTransform(pushedTransforms), tp);
         if (ft) graphicsState.floatTextures[name] = ft;
     } else if (type == "color" || type == "spectrum") {
         // Create _color_ texture and store in _spectrumTextures_
@@ -1183,7 +1236,7 @@ void pbrtTexture(const std::string &name, const std::string &type,
             Warning("Texture \"%s\" being redefined", name.c_str());
         WARN_IF_ANIMATED_TRANSFORM("Texture");
         std::shared_ptr<Texture<Spectrum>> st =
-            MakeSpectrumTexture(texname, curTransform.ActiveTransform(), tp);
+            MakeSpectrumTexture(texname, curTransform.ActiveAbsoluteTransform(pushedTransforms), tp);
         if (st) graphicsState.spectrumTextures[name] = st;
     } else
         Error("Texture type \"%s\" unknown.", type.c_str());
@@ -1243,7 +1296,7 @@ void pbrtLightProbe(const ParamSet &params) {
     VERIFY_WORLD("LightProbe");
     WARN_IF_ANIMATED_TRANSFORM("LightProbe");
     
-    std::shared_ptr<LightProbe> lightProbe = CreateLightProbe(curTransform.ActiveTransform(), params);
+    std::shared_ptr<LightProbe> lightProbe = CreateLightProbe(curTransform.ActiveAbsoluteTransform(pushedTransforms), params);
     renderOptions->lightProbes.push_back(lightProbe);
 
     if (PbrtOptions.cat || PbrtOptions.toPly) {
@@ -1257,7 +1310,7 @@ void pbrtLightSource(const std::string &name, const ParamSet &params) {
     VERIFY_WORLD("LightSource");
     WARN_IF_ANIMATED_TRANSFORM("LightSource");
     MediumInterface mi = graphicsState.CreateMediumInterface();
-    std::shared_ptr<Light> lt = MakeLight(name, params, curTransform.ActiveTransform(), mi);
+    std::shared_ptr<Light> lt = MakeLight(name, params, curTransform.ActiveAbsoluteTransform(pushedTransforms), mi);
     if (!lt)
         Error("LightSource: light type \"%s\" unknown.", name.c_str());
     else
@@ -1307,7 +1360,7 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
             // Possibly create area light for shape
             std::shared_ptr<AreaLight> area;
             if (graphicsState.areaLight != "") {
-                area = MakeAreaLight(graphicsState.areaLight, curTransform.ActiveTransform(),
+                area = MakeAreaLight(graphicsState.areaLight, curTransform.ActiveAbsoluteTransform(pushedTransforms),
                                      mi, graphicsState.areaLightParams, s);
                 if (area) areaLights.push_back(area);
             }
@@ -1558,6 +1611,8 @@ void pbrtWorldEnd() {
                 
                 fileSuffix = ss.str();
             }
+            
+            std::cout << "Rendering frame " << frameNum << ". " << std::endl;
             
             Float frameStartTime = renderOptions->firstFrameTime + frameNum * renderOptions->frameInterval;
             std::unique_ptr<Integrator> integrator(renderOptions->MakeIntegrator(frameStartTime, fileSuffix));

@@ -421,7 +421,16 @@ AnimatedTransform::AnimatedTransform(const std::vector<TransformKeyframe>& _keyf
                   
                   Float cosTheta = Dot(previousKeyframe->R, keyframe.R);
                   Float theta = std::acos(Clamp(cosTheta, -1, 1));
-                  Quaternion qperp = Normalize(keyframe.R - previousKeyframe->R * cosTheta);
+                  
+                  Quaternion q = keyframe.R - previousKeyframe->R * cosTheta;
+                  
+                  Quaternion qperp;
+                  if(Dot(q, q) == 0) {
+                      qperp = Quaternion();
+                  } else {
+                      qperp = Normalize(keyframe.R - previousKeyframe->R * cosTheta);
+                  }
+                  
                   
                   Float t0x = previousKeyframe->T.x;
                   Float t0y = previousKeyframe->T.y;
