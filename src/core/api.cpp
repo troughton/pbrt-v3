@@ -116,6 +116,7 @@
 #include "textures/windy.h"
 #include "textures/wrinkled.h"
 #include "media/grid.h"
+#include "media/grid-container.h"
 #include "media/homogeneous.h"
 #include <map>
 #include <sstream>
@@ -251,7 +252,10 @@ Options PbrtOptions;
                 
                 if (time == parentKeyframes[parentIndex].time) {
                     parentTransform = parentKeyframes[parentIndex].t;
-                    parentIndex += 1;
+                    
+                    if (parentIndex + 1 < parentKeyframes.size()) {
+                        parentIndex += 1;
+                    }
                 } else {
                     // Interpolate the transform
                     const Keyframe& startKeyframe = parentKeyframes[parentIndex];
@@ -263,7 +267,10 @@ Options PbrtOptions;
                 
                 if (time == this->keyframes[thisIndex].time) {
                     localTransform = this->keyframes[thisIndex].t;
-                    thisIndex += 1;
+                    
+                    if (thisIndex + 1 < keyframes.size()) {
+                        thisIndex += 1;
+                    }
                 } else {
                     // Interpolate the transform
                     const Keyframe& startKeyframe = this->keyframes[thisIndex];
@@ -322,6 +329,8 @@ struct RenderOptions {
     ParamSet CameraParams;
     TransformSet CameraToWorld;
     std::map<std::string, std::shared_ptr<Medium>> namedMedia;
+    std::vector<std::string> animatedMedia;
+    std::vector<std::string> animatedGridDensityMedia;
     std::vector<std::shared_ptr<Light>> lights;
     std::vector<std::shared_ptr<LightProbe>> lightProbes;
     std::vector<std::shared_ptr<Primitive>> primitives;
@@ -669,6 +678,11 @@ std::shared_ptr<Texture<Spectrum>> MakeSpectrumTexture(
     return std::shared_ptr<Texture<Spectrum>>(tex);
 }
 
+std::shared_ptr<Medium> MakeMedia(const std::vector<std::shared_ptr<GridDensityMedium>> gridDensityMedia) {
+  Medium *m = new GridDensityMediaContainer(gridDensityMedia);
+  return std::shared_ptr<Medium>(m);
+}
+  
 std::shared_ptr<Medium> MakeMedium(const std::string &name,
                                    const ParamSet &paramSet,
                                    const Transform &medium2world) {
@@ -1084,6 +1098,45 @@ void pbrtMediumInterface(const std::string &insideName,
     if (PbrtOptions.cat || PbrtOptions.toPly)
         printf("%*sMediumInterface \"%s\" \"%s\"\n", catIndentCount, "",
                insideName.c_str(), outsideName.c_str());
+}
+
+  
+void pbrtAnimatedMediaBegin(const std::string &name) {
+  if (!renderOptions->animatedMedia.empty()) {
+    Error("Nested animated media not supported.");
+  }
+  renderOptions->animatedMedia.push_back(name);
+}
+  
+void pbrtMediaInterface(const std::string &name) {
+  renderOptions->animatedGridDensityMedia.push_back(name);
+}
+  
+void pbrtAnimatedMediaEnd() {
+  if (renderOptions->animatedMedia.empty()) {
+    Error("AnimateMediaEnd without AnimateMediaBegin");
+  }
+  
+  std::string mediaName = renderOptions->animatedMedia.back();
+  renderOptions->animatedMedia.pop_back();
+  
+  std::vector<std::shared_ptr<GridDensityMedium>> gridDensityMedia;
+  for (std::string gridDensityMediumName : renderOptions->animatedGridDensityMedia) {
+    std::map<std::string, std::shared_ptr<Medium>>::iterator it = renderOptions->namedMedia.find(gridDensityMediumName);
+    
+    if (it != renderOptions->namedMedia.end()) {
+      std::shared_ptr<GridDensityMedium> gridDensityMedium = std::dynamic_pointer_cast<GridDensityMedium>(it->second);
+      gridDensityMedia.push_back(gridDensityMedium);
+    }
+  }
+  
+  std::shared_ptr<Medium> medium = MakeMedia(gridDensityMedia);
+  if (medium) {
+     renderOptions->namedMedia[mediaName] = medium;
+  }
+  
+  graphicsState.currentInsideMedium = mediaName;
+  renderOptions->haveScatteringMedia = true;
 }
 
 void pbrtWorldBegin() {

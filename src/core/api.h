@@ -68,6 +68,9 @@ void pbrtCamera(const std::string &, const ParamSet &cameraParams);
 void pbrtMakeNamedMedium(const std::string &name, const ParamSet &params);
 void pbrtMediumInterface(const std::string &insideName,
                          const std::string &outsideName);
+void pbrtAnimatedMediaBegin(const std::string &name);
+void pbrtAnimatedMediaEnd();
+void pbrtMediaInterface(const std::string &name);
 void pbrtWorldBegin();
 void pbrtAttributeBegin();
 void pbrtAttributeEnd();
