@@ -69,13 +69,13 @@ Spectrum GridDensityMediaContainer::Sample(const Ray &rWorld, Sampler &sampler,
     
     int startGridIndex = endGridIndex == 0 ? endGridIndex : endGridIndex - 1;
     
-    Float startGridTime = startGridIndex * frameInterval;
-    Float endGridTime = endGridIndex * frameInterval;
-    
     Spectrum startGridSpectrum = this->gridDensityMedia[startGridIndex]->Sample(rWorld, sampler, arena, mi);
     if (startGridIndex == endGridIndex) {
         return startGridSpectrum;
     }
+    
+    Float startGridTime = startGridIndex * frameInterval;
+    Float endGridTime = endGridIndex * frameInterval;
     
     Float dt = (time - startGridTime) / (endGridTime - startGridTime);
     Spectrum endGridSpectrum = this->gridDensityMedia[endGridIndex]->Sample(rWorld, sampler, arena, mi);
@@ -109,13 +109,17 @@ Spectrum GridDensityMediaContainer::Tr(const Ray &rWorld, Sampler &sampler) cons
     
     int startGridIndex = endGridIndex == 1 ? endGridIndex : endGridIndex - 1;
     
+    Spectrum startGridSpectrum = this->gridDensityMedia[startGridIndex]->Tr(rWorld, sampler);
+    if (startGridIndex == endGridIndex) {
+        return startGridSpectrum;
+    }
+    
     Float startGridTime = startGridIndex * frameInterval;
     Float endGridTime = endGridIndex * frameInterval;
     
     Float dt = (time - startGridTime) / (endGridTime - startGridTime);
     
-    Spectrum startGridSpectrum = this->gridDensityMedia[startGridIndex]->Tr(rWorld, sampler);
-    Spectrum endGridSpectrum = startGridIndex == endGridIndex ? startGridSpectrum : this->gridDensityMedia[endGridIndex]->Tr(rWorld, sampler);
+    Spectrum endGridSpectrum = this->gridDensityMedia[endGridIndex]->Tr(rWorld, sampler);
     
     // Interpolate translation at _dt_
     return (1 - dt) * startGridSpectrum + dt * endGridSpectrum;
